@@ -84,7 +84,7 @@ function App() {
   }, [])
 
   return (
-    <div className="app-container" style={{ display: 'flex', minHeight: '100vh', background: '#000' }}>
+    <div className="app-container" style={{ minHeight: '100vh', background: '#000' }}>
       <Sidebar 
         filters={filters} 
         onFilterChange={setFilters} 
@@ -92,7 +92,7 @@ function App() {
         availableEAs={availableEAs}
       />
       
-      <div style={{ paddingLeft: '280px', flex: 1, display: 'flex', flexDirection: 'column', boxSizing: 'border-box', minWidth: 0 }}>
+      <div style={{ marginLeft: '280px', display: 'flex', flexDirection: 'column', minHeight: '100vh' }}>
         <header style={{ 
           display: 'flex', 
           justifyContent: 'space-between', 
