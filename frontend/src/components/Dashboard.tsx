@@ -1,11 +1,11 @@
 import { useState, useEffect, useCallback } from 'react';
 import { api } from '../services/api';
 import type { Deal, Metrics } from '../services/api';
-import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, ReferenceLine, Cell, RadialBarChart, RadialBar, PolarAngleAxis } from 'recharts';
+import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, ReferenceLine, Cell, RadialBarChart, RadialBar, PolarAngleAxis, PieChart, Pie } from 'recharts';
 import { format, parseISO, getDay, getHours } from 'date-fns';
 import { KPICard } from './KPICard';
 import type { DashboardFilters } from './Sidebar';
-import { Activity, TrendingUp, TrendingDown, BarChart3, Trophy, XCircle, Flame, Repeat, Gauge } from 'lucide-react';
+import { Activity, TrendingUp, TrendingDown, Flame, Repeat, Gauge } from 'lucide-react';
 
 const DAY_MAP: { [key: number]: string } = {
   0: 'Dom', 1: 'Seg', 2: 'Ter', 3: 'Qua', 4: 'Qui', 5: 'Sex', 6: 'Sáb'
@@ -189,6 +189,13 @@ export function Dashboard({ filters, onDataLoaded }: { filters: DashboardFilters
   })).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
   const winRateValue = metrics?.general.win_rate ?? 0;
+  const totalTrades = metrics?.general.total_trades ?? 0;
+  const totalWins = metrics?.general.total_wins ?? 0;
+  const totalLosses = metrics?.general.total_losses ?? 0;
+  const tradePieData = [
+    { name: 'Vencedoras', value: totalWins, color: '#00ff00' },
+    { name: 'Perdedoras', value: totalLosses, color: '#ff4444' }
+  ];
 
   const heatmapHours = [...filters.selectedHours].sort((a, b) => a - b);
   const heatmapDays = ['Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb', 'Dom'];
@@ -292,7 +299,7 @@ export function Dashboard({ filters, onDataLoaded }: { filters: DashboardFilters
       {activeTab === 'visao' && (
         <>
           {metrics && (
-            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(260px, 1fr))', columnGap: '30px', rowGap: '30px', marginBottom: '40px', boxSizing: 'border-box', alignItems: 'stretch', gridAutoRows: 'minmax(140px, auto)' }}>
+            <div className="kpi-grid" style={{ marginBottom: '40px' }}>
               <KPICard 
                 title="Lucro Líquido" 
                 value={formatCurrency(metrics.general.net_profit, 'BRL')} 
@@ -315,23 +322,6 @@ export function Dashboard({ filters, onDataLoaded }: { filters: DashboardFilters
                 title="Fator de Lucro" 
                 value={metrics.general.profit_factor?.toFixed(2)} 
                 icon={Gauge}
-              />
-              <KPICard 
-                title="Total de Trades" 
-                value={metrics.general.total_trades} 
-                icon={BarChart3}
-              />
-              <KPICard 
-                title="Operações Vencedoras" 
-                value={metrics.general.total_wins} 
-                color="#00ff00"
-                icon={Trophy}
-              />
-              <KPICard 
-                title="Operações Perdedoras" 
-                value={metrics.general.total_losses} 
-                color="#ff4444"
-                icon={XCircle}
               />
               <KPICard 
                 title="Sequência Positiva" 
@@ -384,6 +374,43 @@ export function Dashboard({ filters, onDataLoaded }: { filters: DashboardFilters
                 <div style={{ position: 'absolute', bottom: '20px', left: 0, right: 0, textAlign: 'center', color: '#888', fontSize: '0.9rem' }}>
                   0% a 100%
                 </div>
+              </div>
+            </div>
+
+            <div style={{ background: '#1e1e1e', padding: '24px', borderRadius: '8px', border: '1px solid #333' }}>
+              <h3 style={{ marginBottom: '20px', color: '#fff', fontSize: '1.1rem', textTransform: 'uppercase', letterSpacing: '1px' }}>Trades</h3>
+              <div style={{ height: '240px', width: '100%', position: 'relative' }}>
+                {totalTrades > 0 ? (
+                  <>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <PieChart>
+                        <Pie data={tradePieData} dataKey="value" nameKey="name" innerRadius="55%" outerRadius="80%" paddingAngle={2}>
+                          {tradePieData.map(entry => (
+                            <Cell key={entry.name} fill={entry.color} />
+                          ))}
+                        </Pie>
+                      </PieChart>
+                    </ResponsiveContainer>
+                    <div style={{ position: 'absolute', top: '50%', left: '50%', transform: 'translate(-50%, -58%)', textAlign: 'center' }}>
+                      <div style={{ color: '#fff', fontSize: '2rem', fontWeight: 'bold' }}>{totalTrades}</div>
+                      <div style={{ color: '#888', fontSize: '0.85rem' }}>Total de Trades</div>
+                    </div>
+                    <div style={{ display: 'flex', justifyContent: 'center', gap: '14px', marginTop: '12px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#00ff00', fontSize: '0.9rem' }}>
+                        <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#00ff00', display: 'inline-block' }} />
+                        Vencedoras {totalWins}
+                      </div>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '6px', color: '#ff4444', fontSize: '0.9rem' }}>
+                        <span style={{ width: '10px', height: '10px', borderRadius: '50%', background: '#ff4444', display: 'inline-block' }} />
+                        Perdedoras {totalLosses}
+                      </div>
+                    </div>
+                  </>
+                ) : (
+                  <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#666' }}>
+                    Sem dados para exibir
+                  </div>
+                )}
               </div>
             </div>
 

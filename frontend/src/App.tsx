@@ -92,7 +92,7 @@ function App() {
         availableEAs={availableEAs}
       />
       
-      <div style={{ marginLeft: '280px', flex: 1, display: 'flex', flexDirection: 'column' }}>
+      <div style={{ paddingLeft: '280px', flex: 1, display: 'flex', flexDirection: 'column', boxSizing: 'border-box', minWidth: 0 }}>
         <header style={{ 
           display: 'flex', 
           justifyContent: 'space-between', 
