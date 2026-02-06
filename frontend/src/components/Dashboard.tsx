@@ -81,7 +81,7 @@ export function Dashboard({ filters, onDataLoaded }: { filters: DashboardFilters
 
   // Apply filters and calculate metrics
   useEffect(() => {
-    if (!rawDeals.length) return;
+    // if (!rawDeals.length) return;
 
     const filtered = rawDeals.filter(deal => {
       const dealDate = new Date(deal.time);
@@ -354,26 +354,32 @@ export function Dashboard({ filters, onDataLoaded }: { filters: DashboardFilters
             <div style={{ background: '#1e1e1e', padding: '24px', borderRadius: '8px', border: '1px solid #333' }}>
               <h3 style={{ marginBottom: '20px', color: '#fff', fontSize: '1.1rem', textTransform: 'uppercase', letterSpacing: '1px' }}>Taxa de Acerto</h3>
               <div style={{ height: '240px', width: '100%', position: 'relative' }}>
-                <ResponsiveContainer width="100%" height="100%">
-                  <RadialBarChart
-                    cx="50%"
-                    cy="75%"
-                    innerRadius="70%"
-                    outerRadius="100%"
-                    startAngle={180}
-                    endAngle={0}
-                    data={[{ name: 'Acerto', value: winRateValue }]}
-                  >
-                    <PolarAngleAxis type="number" domain={[0, 100]} tick={false} angleAxisId={0} />
-                    <RadialBar dataKey="value" cornerRadius={10} fill="#00aaff" background={{ fill: '#222' }} />
-                  </RadialBarChart>
-                </ResponsiveContainer>
-                <div style={{ position: 'absolute', bottom: '45px', left: 0, right: 0, textAlign: 'center', color: '#fff', fontSize: '2rem', fontWeight: 'bold' }}>
-                  {winRateValue.toFixed(1)}%
-                </div>
-                <div style={{ position: 'absolute', bottom: '20px', left: 0, right: 0, textAlign: 'center', color: '#888', fontSize: '0.9rem' }}>
-                  0% a 100%
-                </div>
+                {totalTrades > 0 ? (
+                  <>
+                    <ResponsiveContainer width="100%" height="100%">
+                      <RadialBarChart
+                        cx="50%"
+                        cy="75%"
+                        innerRadius="70%"
+                        outerRadius="100%"
+                        startAngle={180}
+                        endAngle={0}
+                        data={[{ name: 'Acerto', value: winRateValue }]}
+                      >
+                        <PolarAngleAxis type="number" domain={[0, 100]} tick={false} axisLine={false} angleAxisId={0} />
+                        <RadialBar dataKey="value" cornerRadius={10} fill="#00aaff" background={{ fill: '#222' }} />
+                        <Tooltip cursor={false} content={() => null} />
+                      </RadialBarChart>
+                    </ResponsiveContainer>
+                    <div style={{ position: 'absolute', bottom: '45px', left: 0, right: 0, textAlign: 'center', color: '#fff', fontSize: '2rem', fontWeight: 'bold' }}>
+                      {winRateValue.toFixed(1)}%
+                    </div>
+                  </>
+                ) : (
+                  <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#666' }}>
+                    Sem dados para exibir
+                  </div>
+                )}
               </div>
             </div>
 
