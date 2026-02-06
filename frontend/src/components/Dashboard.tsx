@@ -39,7 +39,10 @@ export function Dashboard({ filters, onDataLoaded }: { filters: DashboardFilters
   const fetchData = useCallback(async () => {
     setLoading(true);
     try {
-      const request = { date_from: filters.dateFrom, date_to: filters.dateTo };
+      const now = new Date();
+      const toDate = new Date(filters.dateTo);
+      const effectiveDateTo = toDate.toDateString() === now.toDateString() ? now.toISOString() : filters.dateTo;
+      const request = { date_from: filters.dateFrom, date_to: effectiveDateTo };
       
       // Fetch only deals, calculate metrics locally to support filtering
       const dealsData = await api.getDeals(request);
