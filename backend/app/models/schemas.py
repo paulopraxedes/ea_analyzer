@@ -14,6 +14,8 @@ class Deal(BaseModel):
     reason: int
     volume: float
     price: float
+    price_sl: Optional[float] = None
+    price_tp: Optional[float] = None
     commission: float
     swap: float
     profit: float
@@ -24,6 +26,21 @@ class Deal(BaseModel):
     # Calculated fields
     net_profit: float
     ea_id: str
+
+class Position(BaseModel):
+    ticket: int
+    time: Optional[datetime] = None
+    type: int
+    magic: int
+    volume: float
+    price_open: float
+    price_current: Optional[float] = None
+    sl: Optional[float] = None
+    tp: Optional[float] = None
+    profit: float
+    symbol: str
+    ea_id: str
+    comment: Optional[str] = None
 
 class MetricsResponse(BaseModel):
     general: Dict[str, Any]

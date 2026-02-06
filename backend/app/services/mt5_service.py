@@ -76,6 +76,25 @@ class MT5Service:
 
             df = pd.DataFrame(list(deals), columns=deals[0]._asdict().keys())
             df["time"] = pd.to_datetime(df["time"], unit="s")
+
+            if "price_sl" not in df.columns:
+                df["price_sl"] = None
+            if "price_tp" not in df.columns:
+                df["price_tp"] = None
+
+            orders = mt5.history_orders_get(date_from, date_to)
+            if orders is not None and len(orders) > 0:
+                df_orders = pd.DataFrame(list(orders), columns=orders[0]._asdict().keys())
+                if "position_id" in df_orders.columns:
+                    if "sl" not in df_orders.columns:
+                        df_orders["sl"] = None
+                    if "tp" not in df_orders.columns:
+                        df_orders["tp"] = None
+                    sl_tp = df_orders.groupby("position_id", as_index=False)[["sl", "tp"]].last()
+                    df = df.merge(sl_tp, on="position_id", how="left")
+                    df["price_sl"] = df["sl"].combine_first(df["price_sl"])
+                    df["price_tp"] = df["tp"].combine_first(df["price_tp"])
+                    df = df.drop(columns=["sl", "tp"])
             
             # Filter for entry types (IN/OUT/INOUT) - actually we want OUT/INOUT for results
             # logic from analyzer.py: entry in [1, 2, 3] (ENTRY_OUT, ENTRY_INOUT, ENTRY_OUT_BY)
@@ -94,6 +113,38 @@ class MT5Service:
             
         except Exception as e:
             logger.error(f"Error fetching deals: {e}")
+            return pd.DataFrame()
+
+    def fetch_positions(self) -> pd.DataFrame:
+        if not self.is_connected and not self.connect():
+            return pd.DataFrame()
+
+        try:
+            positions = mt5.positions_get()
+            if positions is None or len(positions) == 0:
+                return pd.DataFrame()
+
+            df = pd.DataFrame(list(positions), columns=positions[0]._asdict().keys())
+            if "time" in df.columns:
+                df["time"] = pd.to_datetime(df["time"], unit="s")
+            if "sl" not in df.columns:
+                df["sl"] = None
+            if "tp" not in df.columns:
+                df["tp"] = None
+            if "price_current" not in df.columns:
+                df["price_current"] = None
+            if "comment" not in df.columns:
+                df["comment"] = None
+
+            def create_ea_id(row):
+                if row["magic"] == 0:
+                    return "Manual"
+                return f"EA {int(row['magic'])}"
+
+            df["ea_id"] = df.apply(create_ea_id, axis=1)
+            return df
+        except Exception as e:
+            logger.error(f"Error fetching positions: {e}")
             return pd.DataFrame()
 
     def _get_dataframe_hash(self, df: pd.DataFrame) -> str:

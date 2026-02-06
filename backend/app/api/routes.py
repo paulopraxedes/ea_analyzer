@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException
 from app.services.mt5_service import mt5_service
-from app.models.schemas import AnalysisRequest, MetricsResponse, Deal, ConnectionStatus
+from app.models.schemas import AnalysisRequest, MetricsResponse, Deal, ConnectionStatus, Position
 from typing import List
 
 router = APIRouter()
@@ -51,3 +51,11 @@ def get_metrics(request: AnalysisRequest):
         df = df[df["ea_id"].isin(request.ea_ids)]
         
     return mt5_service.calculate_metrics(df)
+
+@router.get("/positions", response_model=List[Position])
+def get_positions():
+    df = mt5_service.fetch_positions()
+    if df.empty:
+        return []
+    df = df.where(df.notna(), None)
+    return df.to_dict(orient="records")

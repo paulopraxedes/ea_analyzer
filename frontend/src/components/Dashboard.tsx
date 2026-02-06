@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { api } from '../services/api';
-import type { Deal, Metrics } from '../services/api';
+import type { Deal, Metrics, Position } from '../services/api';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, ReferenceLine, Cell, RadialBarChart, RadialBar, PolarAngleAxis, PieChart, Pie } from 'recharts';
 import { format, parseISO, getDay, getHours } from 'date-fns';
 import { KPICard } from './KPICard';
@@ -27,8 +27,10 @@ type DailyPoint = {
 export function Dashboard({ filters, onDataLoaded }: { filters: DashboardFilters; onDataLoaded?: (assets: string[], eas: string[]) => void }) {
   const [rawDeals, setRawDeals] = useState<Deal[]>([]);
   const [filteredDeals, setFilteredDeals] = useState<Deal[]>([]);
+  const [openPositions, setOpenPositions] = useState<Position[]>([]);
   const [metrics, setMetrics] = useState<Metrics | null>(null);
   const [loading, setLoading] = useState(false);
+  const [lastSyncAt, setLastSyncAt] = useState<Date | null>(null);
   const [activeTab, setActiveTab] = useState<'visao' | 'graficos' | 'heatmap' | 'trades'>('visao');
   
   // Default range: last 5 years to cover everything for now
@@ -47,6 +49,8 @@ export function Dashboard({ filters, onDataLoaded }: { filters: DashboardFilters
       // Fetch only deals, calculate metrics locally to support filtering
       const dealsData = await api.getDeals(request);
       setRawDeals(dealsData);
+      const positionsData = await api.getPositions();
+      setOpenPositions(positionsData);
 
       // Extract unique assets and EAs
       if (dealsData.length > 0) {
@@ -65,6 +69,7 @@ export function Dashboard({ filters, onDataLoaded }: { filters: DashboardFilters
     } catch (error) {
       console.error("Error fetching data:", error);
     } finally {
+      setLastSyncAt(new Date());
       setLoading(false);
     }
   }, [filters.dateFrom, filters.dateTo, onDataLoaded]);
@@ -191,6 +196,20 @@ export function Dashboard({ filters, onDataLoaded }: { filters: DashboardFilters
     profit
   })).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
 
+  const sortedDeals = [...filteredDeals].sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
+  const lastSyncLabel = lastSyncAt ? format(lastSyncAt, 'dd/MM HH:mm:ss') : 'Sem dados';
+  const nextSyncLabel = lastSyncAt
+    ? format(new Date(lastSyncAt.getTime() + filters.resyncMinutes * 60 * 1000), 'dd/MM HH:mm:ss')
+    : 'Sem dados';
+  const formatOptionalPrice = (value: number | null | undefined) => value && value !== 0 ? value : '-';
+  const formatPositionTime = (value: string | null) => value ? format(new Date(value), 'dd/MM/yyyy HH:mm') : '-';
+  const getPositionChange = (position: Position) => {
+    if (!position.price_current || !position.price_open) {
+      return null;
+    }
+    const rawChange = ((position.price_current - position.price_open) / position.price_open) * 100;
+    return position.type === 0 ? rawChange : -rawChange;
+  };
   const winRateValue = metrics?.general.win_rate ?? 0;
   const totalTrades = metrics?.general.total_trades ?? 0;
   const totalWins = metrics?.general.total_wins ?? 0;
@@ -238,6 +257,28 @@ export function Dashboard({ filters, onDataLoaded }: { filters: DashboardFilters
     }
     return acc;
   }, {});
+  const openPositionsFiltered = openPositions.filter(position => {
+    if (!filters.selectedAssets.includes('Todos') && !filters.selectedAssets.includes(position.symbol)) {
+      return false;
+    }
+    if (!filters.selectedEAs.includes('Todos') && !filters.selectedEAs.includes(position.ea_id)) {
+      return false;
+    }
+    return true;
+  });
+  const openPositionsCount = openPositionsFiltered.length;
+  const openPositionsSorted = [...openPositionsFiltered].sort((a, b) => {
+    if (a.time && b.time) {
+      return new Date(b.time).getTime() - new Date(a.time).getTime();
+    }
+    if (a.time) {
+      return -1;
+    }
+    if (b.time) {
+      return 1;
+    }
+    return b.ticket - a.ticket;
+  });
   const topEA = Object.entries(eaStats).sort((a, b) => b[1].net - a[1].net)[0];
   const topEAStats = topEA
     ? {
@@ -352,6 +393,86 @@ export function Dashboard({ filters, onDataLoaded }: { filters: DashboardFilters
               />
             </div>
           )}
+
+          <div style={{ background: '#1e1e1e', padding: '24px', borderRadius: '8px', border: '1px solid #333', marginBottom: '40px' }}>
+            <h3 style={{ marginBottom: '20px', color: '#fff', fontSize: '1.1rem', textTransform: 'uppercase', letterSpacing: '1px' }}>Tempo Real</h3>
+            <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(220px, 1fr))', gap: '20px' }}>
+              <KPICard 
+                title="Atualizado em" 
+                value={lastSyncLabel} 
+              />
+              <KPICard 
+                title="Próxima atualização prevista" 
+                value={nextSyncLabel} 
+              />
+              <KPICard 
+                title="Operações em andamento" 
+                value={openPositionsCount} 
+              />
+            </div>
+            <div style={{ marginTop: '24px', overflowX: 'auto' }}>
+              <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.9rem' }}>
+                <thead>
+                  <tr style={{ borderBottom: '1px solid #444', color: '#aaa' }}>
+                    <th style={{ padding: '12px' }}>Ativo</th>
+                    <th style={{ padding: '12px' }}>Bilhete</th>
+                    <th style={{ padding: '12px' }}>Horário</th>
+                    <th style={{ padding: '12px' }}>Tipo</th>
+                    <th style={{ padding: '12px' }}>Volume</th>
+                    <th style={{ padding: '12px' }}>Preço</th>
+                    <th style={{ padding: '12px' }}>S / L</th>
+                    <th style={{ padding: '12px' }}>T / P</th>
+                    <th style={{ padding: '12px' }}>Preço Atual</th>
+                    <th style={{ padding: '12px' }}>Lucro</th>
+                    <th style={{ padding: '12px' }}>Mudança</th>
+                    <th style={{ padding: '12px' }}>ID do EA</th>
+                    <th style={{ padding: '12px' }}>Comentário</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {openPositionsSorted.length > 0 ? (
+                    openPositionsSorted.map(position => {
+                      const change = getPositionChange(position);
+                      return (
+                        <tr key={position.ticket} style={{ borderBottom: '1px solid #333', color: '#e0e0e0' }}>
+                          <td style={{ padding: '12px' }}>{position.symbol}</td>
+                          <td style={{ padding: '12px' }}>{position.ticket}</td>
+                          <td style={{ padding: '12px' }}>{formatPositionTime(position.time)}</td>
+                          <td style={{ padding: '12px' }}>
+                            <span style={{ 
+                              color: position.type === 0 ? '#00aaff' : '#ff9800',
+                              fontWeight: 'bold'
+                            }}>
+                              {position.type === 0 ? 'BUY' : 'SELL'}
+                            </span>
+                          </td>
+                          <td style={{ padding: '12px' }}>{position.volume}</td>
+                          <td style={{ padding: '12px' }}>{position.price_open}</td>
+                          <td style={{ padding: '12px' }}>{formatOptionalPrice(position.sl)}</td>
+                          <td style={{ padding: '12px' }}>{formatOptionalPrice(position.tp)}</td>
+                          <td style={{ padding: '12px' }}>{formatOptionalPrice(position.price_current)}</td>
+                          <td style={{ padding: '12px', color: position.profit >= 0 ? '#00ff00' : '#ff4444', fontWeight: 'bold' }}>
+                            {formatCurrency(position.profit, position.symbol)}
+                          </td>
+                          <td style={{ padding: '12px', color: change !== null && change >= 0 ? '#00ff00' : '#ff4444', fontWeight: 600 }}>
+                            {change !== null ? `${change.toFixed(2)}%` : '-'}
+                          </td>
+                          <td style={{ padding: '12px' }}>{position.ea_id}</td>
+                          <td style={{ padding: '12px' }}>{position.comment || '-'}</td>
+                        </tr>
+                      );
+                    })
+                  ) : (
+                    <tr>
+                      <td colSpan={13} style={{ padding: '16px', color: '#666', textAlign: 'center' }}>
+                        Sem posições em andamento
+                      </td>
+                    </tr>
+                  )}
+                </tbody>
+              </table>
+            </div>
+          </div>
 
           <div style={{ display: 'grid', gridTemplateColumns: 'repeat(auto-fit, minmax(320px, 1fr))', gap: '30px', marginBottom: '40px' }}>
             <div style={{ background: '#1e1e1e', padding: '24px', borderRadius: '8px', border: '1px solid #333' }}>
@@ -627,18 +748,19 @@ export function Dashboard({ filters, onDataLoaded }: { filters: DashboardFilters
               <thead>
                 <tr style={{ borderBottom: '1px solid #444', color: '#aaa' }}>
                   <th style={{ padding: '15px' }}>Data</th>
-                  <th style={{ padding: '15px' }}>Símbolo</th>
+                  <th style={{ padding: '15px' }}>Ticket</th>
                   <th style={{ padding: '15px' }}>Tipo</th>
                   <th style={{ padding: '15px' }}>Volume</th>
-                  <th style={{ padding: '15px' }}>Preço</th>
-                  <th style={{ padding: '15px' }}>Lucro</th>
+                  <th style={{ padding: '15px' }}>Preço de Entrada</th>
+                  <th style={{ padding: '15px' }}>Lucro/Prejuízo</th>
+                  <th style={{ padding: '15px' }}>EA</th>
                 </tr>
               </thead>
               <tbody>
-                {filteredDeals.slice(-10).reverse().map((deal) => (
+                {sortedDeals.map((deal) => (
                   <tr key={deal.ticket} style={{ borderBottom: '1px solid #333', color: '#e0e0e0' }}>
                     <td style={{ padding: '15px' }}>{format(new Date(deal.time), 'dd/MM/yyyy HH:mm')}</td>
-                    <td style={{ padding: '15px' }}>{deal.symbol}</td>
+                    <td style={{ padding: '15px' }}>{deal.ticket}</td>
                     <td style={{ padding: '15px' }}>
                       <span style={{ 
                         color: deal.type === 0 ? '#00aaff' : '#ff9800',
@@ -652,6 +774,7 @@ export function Dashboard({ filters, onDataLoaded }: { filters: DashboardFilters
                     <td style={{ padding: '15px', color: deal.net_profit >= 0 ? '#00ff00' : '#ff4444', fontWeight: 'bold' }}>
                       {formatCurrency(deal.net_profit, deal.symbol)}
                     </td>
+                    <td style={{ padding: '15px' }}>{deal.ea_id}</td>
                   </tr>
                 ))}
               </tbody>

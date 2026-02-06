@@ -6,6 +6,8 @@ export interface Deal {
   entry: number;
   volume: number;
   price: number;
+  price_sl: number | null;
+  price_tp: number | null;
   profit: number;
   commission: number;
   swap: number;
@@ -13,6 +15,22 @@ export interface Deal {
   comment: string;
   net_profit: number;
   ea_id: string;
+}
+
+export interface Position {
+  ticket: number;
+  time: string | null;
+  type: number;
+  magic: number;
+  volume: number;
+  price_open: number;
+  price_current: number | null;
+  sl: number | null;
+  tp: number | null;
+  profit: number;
+  symbol: string;
+  ea_id: string;
+  comment: string | null;
 }
 
 export interface Metrics {
@@ -63,6 +81,11 @@ export const api = {
       body: JSON.stringify(params),
     });
     return response.json() as Promise<Deal[]>;
+  },
+
+  getPositions: async () => {
+    const response = await fetch(`${API_URL}/positions`);
+    return response.json() as Promise<Position[]>;
   },
 
   getMetrics: async (params: AnalysisRequest) => {
