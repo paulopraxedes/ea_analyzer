@@ -267,6 +267,7 @@ export function Dashboard({ filters, onDataLoaded }: { filters: DashboardFilters
     return true;
   });
   const openPositionsCount = openPositionsFiltered.length;
+  const openPositionsProfitTotal = openPositionsFiltered.reduce((sum, position) => sum + position.profit, 0);
   const openPositionsSorted = [...openPositionsFiltered].sort((a, b) => {
     if (a.time && b.time) {
       return new Date(b.time).getTime() - new Date(a.time).getTime();
@@ -431,37 +432,46 @@ export function Dashboard({ filters, onDataLoaded }: { filters: DashboardFilters
                 </thead>
                 <tbody>
                   {openPositionsSorted.length > 0 ? (
-                    openPositionsSorted.map(position => {
-                      const change = getPositionChange(position);
-                      return (
-                        <tr key={position.ticket} style={{ borderBottom: '1px solid #333', color: '#e0e0e0' }}>
-                          <td style={{ padding: '12px' }}>{position.symbol}</td>
-                          <td style={{ padding: '12px' }}>{position.ticket}</td>
-                          <td style={{ padding: '12px' }}>{formatPositionTime(position.time)}</td>
-                          <td style={{ padding: '12px' }}>
-                            <span style={{ 
-                              color: position.type === 0 ? '#00aaff' : '#ff9800',
-                              fontWeight: 'bold'
-                            }}>
-                              {position.type === 0 ? 'BUY' : 'SELL'}
-                            </span>
-                          </td>
-                          <td style={{ padding: '12px' }}>{position.volume}</td>
-                          <td style={{ padding: '12px' }}>{position.price_open}</td>
-                          <td style={{ padding: '12px' }}>{formatOptionalPrice(position.sl)}</td>
-                          <td style={{ padding: '12px' }}>{formatOptionalPrice(position.tp)}</td>
-                          <td style={{ padding: '12px' }}>{formatOptionalPrice(position.price_current)}</td>
-                          <td style={{ padding: '12px', color: position.profit >= 0 ? '#00ff00' : '#ff4444', fontWeight: 'bold' }}>
-                            {formatCurrency(position.profit, position.symbol)}
-                          </td>
-                          <td style={{ padding: '12px', color: change !== null && change >= 0 ? '#00ff00' : '#ff4444', fontWeight: 600 }}>
-                            {change !== null ? `${change.toFixed(2)}%` : '-'}
-                          </td>
-                          <td style={{ padding: '12px' }}>{position.ea_id}</td>
-                          <td style={{ padding: '12px' }}>{position.comment || '-'}</td>
-                        </tr>
-                      );
-                    })
+                    <>
+                      {openPositionsSorted.map(position => {
+                        const change = getPositionChange(position);
+                        return (
+                          <tr key={position.ticket} style={{ borderBottom: '1px solid #333', color: '#e0e0e0' }}>
+                            <td style={{ padding: '12px' }}>{position.symbol}</td>
+                            <td style={{ padding: '12px' }}>{position.ticket}</td>
+                            <td style={{ padding: '12px' }}>{formatPositionTime(position.time)}</td>
+                            <td style={{ padding: '12px' }}>
+                              <span style={{ 
+                                color: position.type === 0 ? '#00aaff' : '#ff9800',
+                                fontWeight: 'bold'
+                              }}>
+                                {position.type === 0 ? 'BUY' : 'SELL'}
+                              </span>
+                            </td>
+                            <td style={{ padding: '12px' }}>{position.volume}</td>
+                            <td style={{ padding: '12px' }}>{position.price_open}</td>
+                            <td style={{ padding: '12px' }}>{formatOptionalPrice(position.sl)}</td>
+                            <td style={{ padding: '12px' }}>{formatOptionalPrice(position.tp)}</td>
+                            <td style={{ padding: '12px' }}>{formatOptionalPrice(position.price_current)}</td>
+                            <td style={{ padding: '12px', color: position.profit >= 0 ? '#00ff00' : '#ff4444', fontWeight: 'bold' }}>
+                              {formatCurrency(position.profit, position.symbol)}
+                            </td>
+                            <td style={{ padding: '12px', color: change !== null && change >= 0 ? '#00ff00' : '#ff4444', fontWeight: 600 }}>
+                              {change !== null ? `${change.toFixed(2)}%` : '-'}
+                            </td>
+                            <td style={{ padding: '12px' }}>{position.ea_id}</td>
+                            <td style={{ padding: '12px' }}>{position.comment || '-'}</td>
+                          </tr>
+                        );
+                      })}
+                      <tr style={{ borderTop: '1px solid #444', color: '#e0e0e0', fontWeight: 700 }}>
+                        <td colSpan={9} style={{ padding: '12px', textAlign: 'right', color: '#aaa' }}>Total</td>
+                        <td style={{ padding: '12px', color: openPositionsProfitTotal >= 0 ? '#00ff00' : '#ff4444', fontWeight: 'bold' }}>
+                          {formatCurrency(openPositionsProfitTotal, 'BRL')}
+                        </td>
+                        <td colSpan={3} style={{ padding: '12px' }} />
+                      </tr>
+                    </>
                   ) : (
                     <tr>
                       <td colSpan={13} style={{ padding: '16px', color: '#666', textAlign: 'center' }}>
@@ -687,6 +697,7 @@ export function Dashboard({ filters, onDataLoaded }: { filters: DashboardFilters
               )}
             </div>
           </div>
+
         </div>
       )}
 
