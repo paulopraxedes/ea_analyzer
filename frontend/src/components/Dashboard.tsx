@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { api } from '../services/api';
 import type { Deal, Metrics, Position } from '../services/api';
 import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, Legend, ReferenceLine, Cell, RadialBarChart, RadialBar, PolarAngleAxis, PieChart, Pie } from 'recharts';
@@ -19,11 +19,6 @@ type EquityPoint = {
   ticket: number;
 };
 
-type DailyPoint = {
-  date: string;
-  profit: number;
-};
-
 export function Dashboard({ filters, onDataLoaded }: { filters: DashboardFilters; onDataLoaded?: (assets: string[], eas: string[]) => void }) {
   const [rawDeals, setRawDeals] = useState<Deal[]>([]);
   const [filteredDeals, setFilteredDeals] = useState<Deal[]>([]);
@@ -32,6 +27,10 @@ export function Dashboard({ filters, onDataLoaded }: { filters: DashboardFilters
   const [loading, setLoading] = useState(false);
   const [lastSyncAt, setLastSyncAt] = useState<Date | null>(null);
   const [activeTab, setActiveTab] = useState<'visao' | 'graficos' | 'heatmap' | 'trades'>('visao');
+  const [resultLevel, setResultLevel] = useState<'year' | 'month' | 'day'>('year');
+  const [selectedYear, setSelectedYear] = useState<number | null>(null);
+  const [selectedMonth, setSelectedMonth] = useState<number | null>(null);
+  const lastResultClickRef = useRef<{ time: number; key: string | null }>({ time: 0, key: null });
   
   // Default range: last 5 years to cover everything for now
   // In a real app, this should probably come from the filters or be adjustable
@@ -86,6 +85,12 @@ export function Dashboard({ filters, onDataLoaded }: { filters: DashboardFilters
     }, intervalMs);
     return () => clearInterval(intervalId);
   }, [fetchData, filters.resyncMinutes]);
+
+  useEffect(() => {
+    setResultLevel('year');
+    setSelectedYear(null);
+    setSelectedMonth(null);
+  }, [filters.dateFrom, filters.dateTo]);
 
   // Apply filters and calculate metrics
   useEffect(() => {
@@ -184,17 +189,108 @@ export function Dashboard({ filters, onDataLoaded }: { filters: DashboardFilters
     return acc;
   }, []);
 
-  // Calculate daily profit for bar chart
-  const dailyProfitMap = filteredDeals.reduce((acc: {[key: string]: number}, deal) => {
-    const day = format(parseISO(deal.time), 'yyyy-MM-dd');
-    acc[day] = (acc[day] || 0) + deal.net_profit;
+  const resultYearMap = filteredDeals.reduce((acc: Record<string, number>, deal) => {
+    const year = format(parseISO(deal.time), 'yyyy');
+    acc[year] = (acc[year] || 0) + deal.net_profit;
     return acc;
   }, {});
+  const resultYearData = Object.entries(resultYearMap)
+    .map(([year, profit]) => ({
+      label: year,
+      profit,
+      year: Number(year)
+    }))
+    .sort((a, b) => a.year - b.year);
 
-  const dailyData: DailyPoint[] = Object.entries(dailyProfitMap).map(([date, profit]) => ({
-    date,
-    profit
-  })).sort((a, b) => new Date(a.date).getTime() - new Date(b.date).getTime());
+  const resultMonthMap = filteredDeals.reduce((acc: Record<string, number>, deal) => {
+    const date = parseISO(deal.time);
+    const year = date.getFullYear();
+    if (selectedYear !== null && year !== selectedYear) {
+      return acc;
+    }
+    const month = date.getMonth() + 1;
+    const key = `${String(month).padStart(2, '0')}/${year}`;
+    acc[key] = (acc[key] || 0) + deal.net_profit;
+    return acc;
+  }, {});
+  const resultMonthData = Object.entries(resultMonthMap)
+    .map(([label, profit]) => ({
+      label,
+      profit,
+      month: Number(label.split('/')[0])
+    }))
+    .sort((a, b) => a.month - b.month);
+
+  const resultDayMap = filteredDeals.reduce((acc: Record<string, number>, deal) => {
+    const date = parseISO(deal.time);
+    const year = date.getFullYear();
+    const month = date.getMonth();
+    if (selectedYear === null || selectedMonth === null || year !== selectedYear || month !== selectedMonth) {
+      return acc;
+    }
+    const dayKey = format(date, 'dd/MM/yyyy');
+    acc[dayKey] = (acc[dayKey] || 0) + deal.net_profit;
+    return acc;
+  }, {});
+  const resultDayData = Object.entries(resultDayMap)
+    .map(([label, profit]) => ({
+      label,
+      profit,
+      timeValue: parseISO(label.split('/').reverse().join('-')).getTime()
+    }))
+    .sort((a, b) => a.timeValue - b.timeValue);
+
+  const resultDrilldownData = resultLevel === 'year' ? resultYearData : resultLevel === 'month' ? resultMonthData : resultDayData;
+  const resultLevelLabel = resultLevel === 'year' ? 'Ano' : resultLevel === 'month' ? 'Mês' : 'Dia';
+  const resultLevelDetail = resultLevel === 'month' && selectedYear !== null
+    ? `${selectedYear}`
+    : resultLevel === 'day' && selectedYear !== null && selectedMonth !== null
+    ? `${String(selectedMonth + 1).padStart(2, '0')}/${selectedYear}`
+    : '';
+  const handleResultBarClick = (event: { activeLabel?: string | number } | null) => {
+    if (!event?.activeLabel) {
+      return;
+    }
+    const key = String(event.activeLabel);
+    const now = Date.now();
+    const lastClick = lastResultClickRef.current;
+    const isDoubleClick = lastClick.key === key && now - lastClick.time < 350;
+    lastResultClickRef.current = { time: now, key };
+    if (!isDoubleClick) {
+      return;
+    }
+    if (resultLevel === 'year') {
+      const year = Number(key);
+      if (!Number.isNaN(year)) {
+        setSelectedYear(year);
+        setSelectedMonth(null);
+        setResultLevel('month');
+      }
+      return;
+    }
+    if (resultLevel === 'month') {
+      const [monthText, yearText] = key.split('/');
+      const month = Number(monthText);
+      const year = Number(yearText);
+      if (!Number.isNaN(month) && !Number.isNaN(year)) {
+        setSelectedYear(year);
+        setSelectedMonth(month - 1);
+        setResultLevel('day');
+      }
+    }
+  };
+  const handleResultBack = () => {
+    if (resultLevel === 'day') {
+      setResultLevel('month');
+      setSelectedMonth(null);
+      return;
+    }
+    if (resultLevel === 'month') {
+      setResultLevel('year');
+      setSelectedYear(null);
+      setSelectedMonth(null);
+    }
+  };
 
   const sortedDeals = [...filteredDeals].sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
   const lastSyncLabel = lastSyncAt ? format(lastSyncAt, 'dd/MM HH:mm:ss') : 'Sem dados';
@@ -654,15 +750,38 @@ export function Dashboard({ filters, onDataLoaded }: { filters: DashboardFilters
           </div>
 
           <div className="chart-container" style={{ background: '#1e1e1e', padding: '24px', borderRadius: '8px', border: '1px solid #333' }}>
-            <h3 style={{ marginBottom: '20px', color: '#fff', fontSize: '1.1rem', textTransform: 'uppercase', letterSpacing: '1px' }}>Resultado Diário</h3>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px' }}>
+              <h3 style={{ color: '#fff', fontSize: '1.1rem', textTransform: 'uppercase', letterSpacing: '1px' }}>Resultado Diário</h3>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <span style={{ color: '#888', fontSize: '0.85rem' }}>
+                  {resultLevelLabel}{resultLevelDetail ? ` • ${resultLevelDetail}` : ''}
+                </span>
+                {resultLevel !== 'year' && (
+                  <button
+                    onClick={handleResultBack}
+                    style={{
+                      padding: '6px 12px',
+                      borderRadius: '6px',
+                      border: '1px solid #333',
+                      background: '#1b1b1b',
+                      color: '#bbb',
+                      cursor: 'pointer',
+                      fontWeight: 600
+                    }}
+                  >
+                    Voltar
+                  </button>
+                )}
+              </div>
+            </div>
             <div style={{ height: '300px', width: '100%' }}>
-              {dailyData.length > 0 ? (
+              {resultDrilldownData.length > 0 ? (
                 <ResponsiveContainer width="100%" height="100%">
-                  <BarChart data={dailyData}>
+                  <BarChart data={resultDrilldownData} onClick={handleResultBarClick}>
                     <CartesianGrid strokeDasharray="3 3" stroke="#333" />
                     <XAxis 
-                      dataKey="date" 
-                      tickFormatter={(date) => format(parseISO(date), 'dd/MM')}
+                      dataKey="label" 
+                      tickFormatter={(value) => String(value)}
                       stroke="#666"
                       tick={{ fill: '#bbb' }}
                     />
@@ -684,7 +803,7 @@ export function Dashboard({ filters, onDataLoaded }: { filters: DashboardFilters
                     />
                     <ReferenceLine y={0} stroke="#666" />
                     <Bar dataKey="profit" name="Lucro/Prejuízo">
-                      {dailyData.map((entry, index) => (
+                      {resultDrilldownData.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={entry.profit >= 0 ? '#00ff00' : '#ff4444'} />
                       ))}
                     </Bar>
