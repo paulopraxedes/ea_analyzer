@@ -6,6 +6,9 @@ Plataforma web para análise de performance de operações do MetaTrader 5. O pr
 
 - Backend em FastAPI com endpoints para status, conexão e dados
 - Frontend em React/Vite com KPIs, gráficos, heatmap e painel do melhor EA
+- Resultado Diário com drilldown por ano, mês e dia
+- Lista de trades com paginação e seletor de registros por página
+- Tabela de posições em tempo real com total de lucro
 - Filtros por período, ativo, EA, dia da semana e horário
 - Atualização automática configurável por resync em minutos
 
@@ -58,13 +61,21 @@ npm run dev
 
 Abra o navegador em `http://localhost:5173` e clique em Conectar para iniciar a leitura dos dados do MT5.
 
+### Subir Backend e Frontend juntos
+
+```
+run_all.bat
+```
+
+O script abre duas janelas: uma para o backend (FastAPI) e outra para o frontend (Vite).
+
 ## Uso Rápido
 
 1. Configure o período no painel de filtros
 2. Selecione ativos e EAs
 3. Ajuste os filtros de dias e horários
 4. Defina o resync em minutos para atualização automática
-5. Navegue pelas abas para visualizar KPIs, gráficos, heatmap e últimos trades
+5. Navegue pelas abas para visualizar KPIs, gráficos, heatmap e trades
 
 ## Endpoints da API
 

@@ -6,7 +6,14 @@ O formato segue o padrão de Keep a Changelog e versionamento semântico.
 
 ## [Unreleased]
 
-- Ajustes pendentes e melhorias incrementais
+### Adicionado
+- Resultado Diário com drilldown por ano, mês e dia
+- Paginação e seletor de registros na lista de trades
+- Script run_all.bat para subir backend e frontend
+
+### Alterado
+- Aba Últimos Trades renomeada para Trades
+- Tabela de posições em tempo real com total de lucro
 
 ## [0.2.0] - 2026-02-05
 
