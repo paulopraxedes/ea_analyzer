@@ -10,6 +10,7 @@ import { Activity, TrendingUp, TrendingDown, Flame, Repeat, Gauge } from 'lucide
 const DAY_MAP: { [key: number]: string } = {
   0: 'Dom', 1: 'Seg', 2: 'Ter', 3: 'Qua', 4: 'Qui', 5: 'Sex', 6: 'Sáb'
 };
+const ALL_TIME_FROM = new Date(2000, 0, 1).toISOString();
 
 import { formatCurrency } from '../utils/format';
 
@@ -21,6 +22,7 @@ type EquityPoint = {
 
 export function Dashboard({ filters, onDataLoaded }: { filters: DashboardFilters; onDataLoaded?: (assets: string[], eas: string[]) => void }) {
   const [rawDeals, setRawDeals] = useState<Deal[]>([]);
+  const [allDeals, setAllDeals] = useState<Deal[]>([]);
   const [filteredDeals, setFilteredDeals] = useState<Deal[]>([]);
   const [openPositions, setOpenPositions] = useState<Position[]>([]);
   const [metrics, setMetrics] = useState<Metrics | null>(null);
@@ -33,6 +35,8 @@ export function Dashboard({ filters, onDataLoaded }: { filters: DashboardFilters
   const lastResultClickRef = useRef<{ time: number; key: string | null }>({ time: 0, key: null });
   const [tradesPage, setTradesPage] = useState(1);
   const [tradesPerPage, setTradesPerPage] = useState(25);
+  const [eaContributionMode, setEaContributionMode] = useState<'valor' | 'percentual'>('valor');
+  const [eaContributionTopOnly, setEaContributionTopOnly] = useState(false);
   
   // Default range: last 5 years to cover everything for now
   // In a real app, this should probably come from the filters or be adjustable
@@ -46,17 +50,50 @@ export function Dashboard({ filters, onDataLoaded }: { filters: DashboardFilters
       const toDate = new Date(filters.dateTo);
       const effectiveDateTo = toDate.toDateString() === now.toDateString() ? now.toISOString() : filters.dateTo;
       const request = { date_from: filters.dateFrom, date_to: effectiveDateTo };
+      const rangeFromDeals = (deals: Deal[]) => {
+        if (deals.length === 0) {
+          return { min: null, max: null };
+        }
+        const times = deals.map((deal) => new Date(deal.time).getTime());
+        const min = new Date(Math.min(...times)).toISOString();
+        const max = new Date(Math.max(...times)).toISOString();
+        return { min, max };
+      };
       
       // Fetch only deals, calculate metrics locally to support filtering
       const dealsData = await api.getDeals(request);
       setRawDeals(dealsData);
+      const allDealsData = await api.getDeals({ date_from: ALL_TIME_FROM, date_to: effectiveDateTo });
+      setAllDeals(allDealsData);
       const positionsData = await api.getPositions();
       setOpenPositions(positionsData);
+      const periodRange = rangeFromDeals(dealsData);
+      const totalRange = rangeFromDeals(allDealsData);
+      console.info('[Dashboard] período selecionado', {
+        dateFrom: filters.dateFrom,
+        dateTo: filters.dateTo,
+        effectiveDateTo,
+        request,
+        dealsCount: dealsData.length,
+        rangeMin: periodRange.min,
+        rangeMax: periodRange.max
+      });
+      console.info('[Dashboard] total histórico', {
+        dateFrom: ALL_TIME_FROM,
+        dateTo: effectiveDateTo,
+        dealsCount: allDealsData.length,
+        rangeMin: totalRange.min,
+        rangeMax: totalRange.max
+      });
 
       // Extract unique assets and EAs
-      if (dealsData.length > 0) {
-        const assets = [...new Set(dealsData.map(d => d.symbol))].sort();
-        const eas = [...new Set(dealsData.map(d => d.ea_id))].sort();
+      // Use dealsData (current period) instead of allDealsData to ensure filters match the selected period
+      // Also apply strict date filtering to match the logic in filteredDeals
+      const sourceDeals = dealsData.filter(d => new Date(d.time) >= new Date(filters.dateFrom));
+      
+      if (sourceDeals.length > 0) {
+        const assets = [...new Set(sourceDeals.map(d => d.symbol))].sort();
+        const eas = [...new Set(sourceDeals.map(d => d.ea_id))].sort();
         
         if (onDataLoaded) {
           onDataLoaded(assets, eas);
@@ -102,6 +139,11 @@ export function Dashboard({ filters, onDataLoaded }: { filters: DashboardFilters
       const dealDate = new Date(deal.time);
       const dayName = DAY_MAP[getDay(dealDate)];
       const hour = getHours(dealDate);
+      // Date Filter (Safety check for strict period compliance)
+      if (new Date(deal.time) < new Date(filters.dateFrom)) {
+        return false;
+      }
+      
       // Asset Filter
       if (!filters.selectedAssets.includes('Todos') && !filters.selectedAssets.includes(deal.symbol)) {
         return false;
@@ -125,6 +167,7 @@ export function Dashboard({ filters, onDataLoaded }: { filters: DashboardFilters
       return true;
     });
 
+    console.log(`[Filter] Applied filters. Raw: ${rawDeals.length}, Result: ${filtered.length}`);
     setFilteredDeals(filtered);
 
     // Calculate metrics locally
@@ -177,6 +220,28 @@ export function Dashboard({ filters, onDataLoaded }: { filters: DashboardFilters
       sequences: {},
       extremes: {}
     });
+    if (filtered.length > 0) {
+      const times = filtered.map((deal) => new Date(deal.time).getTime());
+      const min = new Date(Math.min(...times)).toISOString();
+      const max = new Date(Math.max(...times)).toISOString();
+      console.info('[Dashboard] período filtrado aplicado', {
+        filteredCount: filtered.length,
+        rangeMin: min,
+        rangeMax: max,
+        assets: filters.selectedAssets,
+        eas: filters.selectedEAs,
+        days: filters.selectedDays,
+        hours: filters.selectedHours
+      });
+    } else {
+      console.info('[Dashboard] período filtrado aplicado', {
+        filteredCount: 0,
+        assets: filters.selectedAssets,
+        eas: filters.selectedEAs,
+        days: filters.selectedDays,
+        hours: filters.selectedHours
+      });
+    }
 
   }, [rawDeals, filters]);
 
@@ -395,6 +460,57 @@ export function Dashboard({ filters, onDataLoaded }: { filters: DashboardFilters
         avgLoss: topEA[1].losses > 0 ? topEA[1].grossLoss / topEA[1].losses : 0
       }
     : null;
+  const allFilteredDeals = allDeals.filter(deal => {
+    const dealDate = new Date(deal.time);
+    const dayName = DAY_MAP[getDay(dealDate)];
+    const hour = getHours(dealDate);
+    if (!filters.selectedAssets.includes('Todos') && !filters.selectedAssets.includes(deal.symbol)) {
+      return false;
+    }
+    if (!filters.selectedEAs.includes('Todos') && !filters.selectedEAs.includes(deal.ea_id)) {
+      return false;
+    }
+    if (!filters.selectedDays.includes(dayName)) {
+      return false;
+    }
+    if (!filters.selectedHours.includes(hour)) {
+      return false;
+    }
+    return true;
+  });
+  const periodTotalNet = filteredDeals.reduce((sum, deal) => sum + deal.net_profit, 0);
+  const allTimeTotalNet = allFilteredDeals.reduce((sum, deal) => sum + deal.net_profit, 0);
+  const periodContributionMap = filteredDeals.reduce((acc: Record<string, number>, deal) => {
+    acc[deal.ea_id] = (acc[deal.ea_id] || 0) + deal.net_profit;
+    return acc;
+  }, {});
+  const allTimeContributionMap = allFilteredDeals.reduce((acc: Record<string, number>, deal) => {
+    acc[deal.ea_id] = (acc[deal.ea_id] || 0) + deal.net_profit;
+    return acc;
+  }, {});
+  const eaContributionData = Array.from(new Set([...Object.keys(periodContributionMap), ...Object.keys(allTimeContributionMap)])).map((ea) => {
+    const periodNet = periodContributionMap[ea] ?? 0;
+    const totalNet = allTimeContributionMap[ea] ?? 0;
+    return {
+      ea,
+      periodNet,
+      totalNet,
+      periodShare: periodTotalNet !== 0 ? periodNet / periodTotalNet : 0,
+      totalShare: allTimeTotalNet !== 0 ? totalNet / allTimeTotalNet : 0
+    };
+  }).sort((a, b) => {
+    if (b.periodNet !== a.periodNet) {
+      return b.periodNet - a.periodNet;
+    }
+    return b.totalNet - a.totalNet;
+  });
+  const eaContributionDisplayBase = eaContributionTopOnly ? eaContributionData.slice(0, 10) : eaContributionData;
+  const eaContributionDisplayData = eaContributionDisplayBase.map((entry) => ({
+    ...entry,
+    periodDisplay: eaContributionMode === 'percentual' ? entry.periodShare * 100 : entry.periodNet,
+    totalDisplay: eaContributionMode === 'percentual' ? entry.totalShare * 100 : entry.totalNet
+  }));
+  const eaContributionChartHeight = Math.max(320, eaContributionDisplayData.length * 36);
 
   if (loading) return <div style={{ padding: '20px', color: '#ccc' }}>Carregando dados...</div>;
 
@@ -813,6 +929,138 @@ export function Dashboard({ filters, onDataLoaded }: { filters: DashboardFilters
                     <Bar dataKey="profit" name="Lucro/Prejuízo">
                       {resultDrilldownData.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={entry.profit >= 0 ? '#00ff00' : '#ff4444'} />
+                      ))}
+                    </Bar>
+                  </BarChart>
+                </ResponsiveContainer>
+              ) : (
+                <div style={{ height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#666' }}>
+                  Sem dados para exibir
+                </div>
+              )}
+            </div>
+          </div>
+
+          <div className="chart-container" style={{ background: '#1e1e1e', padding: '24px', borderRadius: '8px', border: '1px solid #333' }}>
+            <div style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', marginBottom: '20px', gap: '12px', flexWrap: 'wrap' }}>
+              <h3 style={{ color: '#fff', fontSize: '1.1rem', textTransform: 'uppercase', letterSpacing: '1px' }}>Contribuição por EA</h3>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+                <button
+                  onClick={() => setEaContributionMode('valor')}
+                  style={{
+                    padding: '6px 10px',
+                    borderRadius: '6px',
+                    border: '1px solid #333',
+                    background: eaContributionMode === 'valor' ? '#00aaff' : '#1b1b1b',
+                    color: eaContributionMode === 'valor' ? '#fff' : '#bbb',
+                    cursor: 'pointer',
+                    fontWeight: 600
+                  }}
+                >
+                  Valor
+                </button>
+                <button
+                  onClick={() => setEaContributionMode('percentual')}
+                  style={{
+                    padding: '6px 10px',
+                    borderRadius: '6px',
+                    border: '1px solid #333',
+                    background: eaContributionMode === 'percentual' ? '#00aaff' : '#1b1b1b',
+                    color: eaContributionMode === 'percentual' ? '#fff' : '#bbb',
+                    cursor: 'pointer',
+                    fontWeight: 600
+                  }}
+                >
+                  %
+                </button>
+                <button
+                  onClick={() => setEaContributionTopOnly((value) => !value)}
+                  style={{
+                    padding: '6px 10px',
+                    borderRadius: '6px',
+                    border: '1px solid #333',
+                    background: eaContributionTopOnly ? '#00aaff' : '#1b1b1b',
+                    color: eaContributionTopOnly ? '#fff' : '#bbb',
+                    cursor: 'pointer',
+                    fontWeight: 600
+                  }}
+                >
+                  Top 10
+                </button>
+              </div>
+            </div>
+            <div style={{ height: `${eaContributionChartHeight}px`, width: '100%' }}>
+              {eaContributionDisplayData.length > 0 ? (
+                <ResponsiveContainer width="100%" height="100%">
+                  <BarChart 
+                    data={eaContributionDisplayData} 
+                    layout="vertical" 
+                    margin={{ left: 20, right: 20 }}
+                    barGap={-25} // Sobreposição das barras
+                  >
+                    <CartesianGrid strokeDasharray="3 3" stroke="#333" horizontal={false} />
+                    <XAxis 
+                      type="number"
+                      stroke="#666"
+                      tick={{ fill: '#bbb' }}
+                      tickFormatter={(value) => {
+                        if (eaContributionMode === 'percentual') {
+                          return `${Number(value).toFixed(0)}%`;
+                        }
+                        return formatCurrency(Number(value), 'BRL');
+                      }}
+                    />
+                    <YAxis 
+                      type="category"
+                      dataKey="ea"
+                      stroke="#666"
+                      tick={{ fill: '#e0e0e0', fontSize: '0.85rem' }}
+                      width={140}
+                      tickLine={false}
+                    />
+                    <Tooltip 
+                      contentStyle={{ backgroundColor: '#1a1a1a', border: '1px solid #333', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.5)' }}
+                      itemStyle={{ color: '#fff' }}
+                      labelStyle={{ color: '#888', marginBottom: '8px' }}
+                      cursor={{ fill: 'rgba(255,255,255,0.05)' }}
+                      formatter={(_value, name, props) => {
+                        const payload = props.payload as { periodNet: number; totalNet: number; periodShare: number; totalShare: number };
+                        const isPeriod = name === 'Período';
+                        const rawValue = isPeriod ? payload.periodNet : payload.totalNet;
+                        const share = isPeriod ? payload.periodShare : payload.totalShare;
+                        
+                        const shareLabel = Number.isFinite(share) ? `${(share * 100).toFixed(1)}%` : '0.0%';
+                        const valueLabel = formatCurrency(rawValue, 'BRL');
+                        
+                        return [
+                          <span key={name} style={{ color: rawValue >= 0 ? '#4ade80' : '#f87171' }}>
+                            {valueLabel} <span style={{ color: '#666', fontSize: '0.8em' }}>({shareLabel})</span>
+                          </span>,
+                          name
+                        ];
+                      }}
+                    />
+                    <Legend wrapperStyle={{ paddingTop: '10px' }} />
+                    <ReferenceLine x={0} stroke="#444" strokeWidth={1} />
+                    
+                    {/* Barra de Total (Fundo) */}
+                    <Bar dataKey="totalDisplay" name="Total" barSize={20} radius={[0, 4, 4, 0]}>
+                      {eaContributionDisplayData.map((entry, index) => (
+                        <Cell 
+                          key={`cell-total-${index}`} 
+                          fill={entry.totalNet >= 0 ? 'rgba(74, 222, 128, 0.15)' : 'rgba(248, 113, 113, 0.15)'}
+                          stroke={entry.totalNet >= 0 ? 'rgba(74, 222, 128, 0.3)' : 'rgba(248, 113, 113, 0.3)'}
+                        />
+                      ))}
+                    </Bar>
+                    
+                    {/* Barra de Período (Frente) */}
+                    <Bar dataKey="periodDisplay" name="Período" barSize={12} radius={[0, 3, 3, 0]}>
+                      {eaContributionDisplayData.map((entry, index) => (
+                        <Cell 
+                          key={`cell-period-${index}`} 
+                          fill={entry.periodNet >= 0 ? '#4ade80' : '#f87171'} 
+                        />
                       ))}
                     </Bar>
                   </BarChart>
