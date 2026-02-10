@@ -31,6 +31,8 @@ export function Dashboard({ filters, onDataLoaded }: { filters: DashboardFilters
   const [selectedYear, setSelectedYear] = useState<number | null>(null);
   const [selectedMonth, setSelectedMonth] = useState<number | null>(null);
   const lastResultClickRef = useRef<{ time: number; key: string | null }>({ time: 0, key: null });
+  const [tradesPage, setTradesPage] = useState(1);
+  const [tradesPerPage, setTradesPerPage] = useState(25);
   
   // Default range: last 5 years to cover everything for now
   // In a real app, this should probably come from the filters or be adjustable
@@ -293,6 +295,12 @@ export function Dashboard({ filters, onDataLoaded }: { filters: DashboardFilters
   };
 
   const sortedDeals = [...filteredDeals].sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime());
+  const tradesTotal = sortedDeals.length;
+  const tradesTotalPages = Math.max(1, Math.ceil(tradesTotal / tradesPerPage));
+  const tradesPageSafe = Math.min(Math.max(tradesPage, 1), tradesTotalPages);
+  const tradesStartIndex = (tradesPageSafe - 1) * tradesPerPage;
+  const tradesEndIndex = tradesStartIndex + tradesPerPage;
+  const tradesPageData = sortedDeals.slice(tradesStartIndex, tradesEndIndex);
   const lastSyncLabel = lastSyncAt ? format(lastSyncAt, 'dd/MM HH:mm:ss') : 'Sem dados';
   const nextSyncLabel = lastSyncAt
     ? format(new Date(lastSyncAt.getTime() + filters.resyncMinutes * 60 * 1000), 'dd/MM HH:mm:ss')
@@ -417,7 +425,7 @@ export function Dashboard({ filters, onDataLoaded }: { filters: DashboardFilters
           { id: 'visao', label: 'Visão Geral' },
           { id: 'graficos', label: 'Gráficos' },
           { id: 'heatmap', label: 'Mapa de Calor' },
-          { id: 'trades', label: 'Últimos Trades' }
+          { id: 'trades', label: 'Trades' }
         ].map(tab => (
           <button
             key={tab.id}
@@ -872,7 +880,7 @@ export function Dashboard({ filters, onDataLoaded }: { filters: DashboardFilters
 
       {activeTab === 'trades' && (
         <div style={{ background: '#1e1e1e', padding: '24px', borderRadius: '8px', border: '1px solid #333' }}>
-          <h3 style={{ marginBottom: '20px', color: '#fff', fontSize: '1.1rem', textTransform: 'uppercase', letterSpacing: '1px' }}>Últimos Trades</h3>
+          <h3 style={{ marginBottom: '20px', color: '#fff', fontSize: '1.1rem', textTransform: 'uppercase', letterSpacing: '1px' }}>Trades</h3>
           <div style={{ overflowX: 'auto' }}>
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.9rem' }}>
               <thead>
@@ -887,7 +895,7 @@ export function Dashboard({ filters, onDataLoaded }: { filters: DashboardFilters
                 </tr>
               </thead>
               <tbody>
-                {sortedDeals.map((deal) => (
+                {tradesPageData.map((deal) => (
                   <tr key={deal.ticket} style={{ borderBottom: '1px solid #333', color: '#e0e0e0' }}>
                     <td style={{ padding: '15px' }}>{format(new Date(deal.time), 'dd/MM/yyyy HH:mm')}</td>
                     <td style={{ padding: '15px' }}>{deal.ticket}</td>
@@ -909,6 +917,99 @@ export function Dashboard({ filters, onDataLoaded }: { filters: DashboardFilters
                 ))}
               </tbody>
             </table>
+          </div>
+          <div style={{ display: 'flex', flexWrap: 'wrap', gap: '12px', alignItems: 'center', justifyContent: 'space-between', marginTop: '16px' }}>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px', color: '#bbb', fontSize: '0.9rem' }}>
+              <span>Total: {tradesTotal}</span>
+              <span>Página {tradesPageSafe} de {tradesTotalPages}</span>
+            </div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: '10px' }}>
+              <label style={{ color: '#bbb', fontSize: '0.9rem' }}>
+                Registros por página
+                <select
+                  value={tradesPerPage}
+                  onChange={(event) => {
+                    const value = Number(event.target.value);
+                    setTradesPerPage(value);
+                    setTradesPage(1);
+                  }}
+                  style={{
+                    marginLeft: '8px',
+                    padding: '6px 8px',
+                    borderRadius: '6px',
+                    border: '1px solid #333',
+                    background: '#1b1b1b',
+                    color: '#bbb'
+                  }}
+                >
+                  {[10, 25, 50, 100].map(option => (
+                    <option key={option} value={option}>{option}</option>
+                  ))}
+                </select>
+              </label>
+              <div style={{ display: 'flex', alignItems: 'center', gap: '6px' }}>
+                <button
+                  onClick={() => setTradesPage(1)}
+                  disabled={tradesPageSafe === 1}
+                  style={{
+                    padding: '6px 10px',
+                    borderRadius: '6px',
+                    border: '1px solid #333',
+                    background: tradesPageSafe === 1 ? '#151515' : '#1b1b1b',
+                    color: tradesPageSafe === 1 ? '#555' : '#bbb',
+                    cursor: tradesPageSafe === 1 ? 'default' : 'pointer',
+                    fontWeight: 600
+                  }}
+                >
+                  Primeiro
+                </button>
+                <button
+                  onClick={() => setTradesPage(tradesPageSafe - 1)}
+                  disabled={tradesPageSafe === 1}
+                  style={{
+                    padding: '6px 10px',
+                    borderRadius: '6px',
+                    border: '1px solid #333',
+                    background: tradesPageSafe === 1 ? '#151515' : '#1b1b1b',
+                    color: tradesPageSafe === 1 ? '#555' : '#bbb',
+                    cursor: tradesPageSafe === 1 ? 'default' : 'pointer',
+                    fontWeight: 600
+                  }}
+                >
+                  Anterior
+                </button>
+                <button
+                  onClick={() => setTradesPage(tradesPageSafe + 1)}
+                  disabled={tradesPageSafe === tradesTotalPages}
+                  style={{
+                    padding: '6px 10px',
+                    borderRadius: '6px',
+                    border: '1px solid #333',
+                    background: tradesPageSafe === tradesTotalPages ? '#151515' : '#1b1b1b',
+                    color: tradesPageSafe === tradesTotalPages ? '#555' : '#bbb',
+                    cursor: tradesPageSafe === tradesTotalPages ? 'default' : 'pointer',
+                    fontWeight: 600
+                  }}
+                >
+                  Próximo
+                </button>
+                <button
+                  onClick={() => setTradesPage(tradesTotalPages)}
+                  disabled={tradesPageSafe === tradesTotalPages}
+                  style={{
+                    padding: '6px 10px',
+                    borderRadius: '6px',
+                    border: '1px solid #333',
+                    background: tradesPageSafe === tradesTotalPages ? '#151515' : '#1b1b1b',
+                    color: tradesPageSafe === tradesTotalPages ? '#555' : '#bbb',
+                    cursor: tradesPageSafe === tradesTotalPages ? 'default' : 'pointer',
+                    fontWeight: 600
+                  }}
+                >
+                  Último
+                </button>
+              </div>
+            </div>
           </div>
         </div>
       )}
