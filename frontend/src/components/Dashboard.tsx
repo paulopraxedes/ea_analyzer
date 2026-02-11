@@ -173,6 +173,40 @@ export function Dashboard({ filters, onDataLoaded }: { filters: DashboardFilters
     // Calculate metrics locally
     const total_trades = filtered.length;
     const net_profit = filtered.reduce((sum, d) => sum + d.net_profit, 0);
+    
+    // Calculate Balance Growth
+    // 1. Calculate initial balance (sum of profits before dateFrom)
+    const historyDeals = allDeals.filter(deal => {
+      // Must be before the selected period
+      if (new Date(deal.time) >= new Date(filters.dateFrom)) return false;
+      
+      // Must match current filters (Asset/EA)
+      // Note: We deliberately IGNORE day/hour filters for initial balance 
+      // because the account balance exists regardless of those specific filters
+      if (!filters.selectedAssets.includes('Todos') && !filters.selectedAssets.includes(deal.symbol)) {
+        return false;
+      }
+      if (!filters.selectedEAs.includes('Todos') && !filters.selectedEAs.includes(deal.ea_id)) {
+        return false;
+      }
+      return true;
+    });
+    
+    const balanceStart = historyDeals.reduce((sum, d) => sum + d.net_profit, 0);
+    let growthPercentage = 0;
+    
+    // Logic for growth calculation:
+    // If we started with 0 or negative, any profit is technically infinite growth or recovery
+    // We'll use a standard variation formula: (End - Start) / |Start|
+    if (Math.abs(balanceStart) > 0.01) { // Avoid division by zero
+      const balanceEnd = balanceStart + net_profit;
+      growthPercentage = ((balanceEnd - balanceStart) / Math.abs(balanceStart)) * 100;
+    } else if (net_profit !== 0) {
+      // If start is 0, any profit/loss is 100% variation technically, 
+      // but let's treat it as 0% reference or handle display separately
+      growthPercentage = net_profit > 0 ? 100 : -100; 
+    }
+
     const wins = filtered.filter(d => d.net_profit >= 0);
     const losses = filtered.filter(d => d.net_profit < 0);
     const gross_profit = wins.reduce((sum, d) => sum + d.net_profit, 0);
@@ -214,7 +248,8 @@ export function Dashboard({ filters, onDataLoaded }: { filters: DashboardFilters
         win_rate,
         profit_factor,
         max_win_streak: maxWinStreak,
-        max_loss_streak: maxLossStreak
+        max_loss_streak: maxLossStreak,
+        period_growth: growthPercentage
       },
       advanced: {},
       sequences: {},
@@ -564,7 +599,15 @@ export function Dashboard({ filters, onDataLoaded }: { filters: DashboardFilters
       {activeTab === 'visao' && (
         <>
           {metrics && (
-            <div className="kpi-grid" style={{ marginBottom: '40px' }}>
+            <>
+            <h3 style={{ marginBottom: '20px', color: '#fff', fontSize: '1.1rem', textTransform: 'uppercase', letterSpacing: '1px' }}>Visão Geral</h3>
+            <div className="kpi-grid" style={{ marginBottom: '40px', display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '20px' }}>
+              <KPICard 
+                title="Evolução do Saldo" 
+                value={`${metrics.general.period_growth > 0 ? '+' : ''}${metrics.general.period_growth.toFixed(2)}%`} 
+                color={metrics.general.period_growth >= 0 ? "#00ff00" : "#ff4444"}
+                icon={Gauge}
+              />
               <KPICard 
                 title="Lucro Líquido" 
                 value={formatCurrency(metrics.general.net_profit, 'BRL')} 
@@ -613,6 +656,7 @@ export function Dashboard({ filters, onDataLoaded }: { filters: DashboardFilters
                 icon={TrendingDown}
               />
             </div>
+            </>
           )}
 
           <div style={{ background: '#1e1e1e', padding: '24px', borderRadius: '8px', border: '1px solid #333', marginBottom: '40px' }}>
