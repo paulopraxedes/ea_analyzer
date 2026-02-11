@@ -15,6 +15,7 @@ export interface Deal {
   comment: string;
   net_profit: number;
   ea_id: string;
+  position_id: number;
 }
 
 export interface Position {

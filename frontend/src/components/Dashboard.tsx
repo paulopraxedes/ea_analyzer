@@ -1134,7 +1134,9 @@ export function Dashboard({ filters, onDataLoaded }: { filters: DashboardFilters
               <thead>
                 <tr style={{ borderBottom: '1px solid #444', color: '#aaa' }}>
                   <th style={{ padding: '15px' }}>Data</th>
-                  <th style={{ padding: '15px' }}>Ticket</th>
+                  <th style={{ padding: '15px' }}>Ticket (Deal)</th>
+                  <th style={{ padding: '15px' }}>ID Posição</th>
+                  <th style={{ padding: '15px' }}>Ativo</th>
                   <th style={{ padding: '15px' }}>Tipo</th>
                   <th style={{ padding: '15px' }}>Volume</th>
                   <th style={{ padding: '15px' }}>Preço de Entrada</th>
@@ -1147,6 +1149,8 @@ export function Dashboard({ filters, onDataLoaded }: { filters: DashboardFilters
                   <tr key={deal.ticket} style={{ borderBottom: '1px solid #333', color: '#e0e0e0' }}>
                     <td style={{ padding: '15px' }}>{format(new Date(deal.time), 'dd/MM/yyyy HH:mm')}</td>
                     <td style={{ padding: '15px' }}>{deal.ticket}</td>
+                    <td style={{ padding: '15px' }}>{deal.position_id}</td>
+                    <td style={{ padding: '15px' }}>{deal.symbol}</td>
                     <td style={{ padding: '15px' }}>
                       <span style={{ 
                         color: deal.type === 0 ? '#00aaff' : '#ff9800',
