@@ -495,55 +495,25 @@ export function Dashboard({ filters, onDataLoaded }: { filters: DashboardFilters
         avgLoss: topEA[1].losses > 0 ? topEA[1].grossLoss / topEA[1].losses : 0
       }
     : null;
-  const allFilteredDeals = allDeals.filter(deal => {
-    const dealDate = new Date(deal.time);
-    const dayName = DAY_MAP[getDay(dealDate)];
-    const hour = getHours(dealDate);
-    if (!filters.selectedAssets.includes('Todos') && !filters.selectedAssets.includes(deal.symbol)) {
-      return false;
-    }
-    if (!filters.selectedEAs.includes('Todos') && !filters.selectedEAs.includes(deal.ea_id)) {
-      return false;
-    }
-    if (!filters.selectedDays.includes(dayName)) {
-      return false;
-    }
-    if (!filters.selectedHours.includes(hour)) {
-      return false;
-    }
-    return true;
-  });
   const periodTotalNet = filteredDeals.reduce((sum, deal) => sum + deal.net_profit, 0);
-  const allTimeTotalNet = allFilteredDeals.reduce((sum, deal) => sum + deal.net_profit, 0);
   const periodContributionMap = filteredDeals.reduce((acc: Record<string, number>, deal) => {
     acc[deal.ea_id] = (acc[deal.ea_id] || 0) + deal.net_profit;
     return acc;
   }, {});
-  const allTimeContributionMap = allFilteredDeals.reduce((acc: Record<string, number>, deal) => {
-    acc[deal.ea_id] = (acc[deal.ea_id] || 0) + deal.net_profit;
-    return acc;
-  }, {});
-  const eaContributionData = Array.from(new Set([...Object.keys(periodContributionMap), ...Object.keys(allTimeContributionMap)])).map((ea) => {
+  const eaContributionData = Object.keys(periodContributionMap).map((ea) => {
     const periodNet = periodContributionMap[ea] ?? 0;
-    const totalNet = allTimeContributionMap[ea] ?? 0;
+    // We only care about period data now
     return {
       ea,
       periodNet,
-      totalNet,
       periodShare: periodTotalNet !== 0 ? periodNet / periodTotalNet : 0,
-      totalShare: allTimeTotalNet !== 0 ? totalNet / allTimeTotalNet : 0
     };
-  }).sort((a, b) => {
-    if (b.periodNet !== a.periodNet) {
-      return b.periodNet - a.periodNet;
-    }
-    return b.totalNet - a.totalNet;
-  });
+  }).sort((a, b) => b.periodNet - a.periodNet);
+
   const eaContributionDisplayBase = eaContributionTopOnly ? eaContributionData.slice(0, 10) : eaContributionData;
   const eaContributionDisplayData = eaContributionDisplayBase.map((entry) => ({
     ...entry,
     periodDisplay: eaContributionMode === 'percentual' ? entry.periodShare * 100 : entry.periodNet,
-    totalDisplay: eaContributionMode === 'percentual' ? entry.totalShare * 100 : entry.totalNet
   }));
   const eaContributionChartHeight = Math.max(320, eaContributionDisplayData.length * 36);
 
@@ -1068,10 +1038,10 @@ export function Dashboard({ filters, onDataLoaded }: { filters: DashboardFilters
                       labelStyle={{ color: '#888', marginBottom: '8px' }}
                       cursor={{ fill: 'rgba(255,255,255,0.05)' }}
                       formatter={(_value, name, props) => {
-                        const payload = props.payload as { periodNet: number; totalNet: number; periodShare: number; totalShare: number };
+                        const payload = props.payload as { periodNet: number; periodShare: number };
                         const isPeriod = name === 'Período';
-                        const rawValue = isPeriod ? payload.periodNet : payload.totalNet;
-                        const share = isPeriod ? payload.periodShare : payload.totalShare;
+                        const rawValue = isPeriod ? payload.periodNet : 0;
+                        const share = isPeriod ? payload.periodShare : 0;
                         
                         const shareLabel = Number.isFinite(share) ? `${(share * 100).toFixed(1)}%` : '0.0%';
                         const valueLabel = formatCurrency(rawValue, 'BRL');
@@ -1087,19 +1057,8 @@ export function Dashboard({ filters, onDataLoaded }: { filters: DashboardFilters
                     <Legend wrapperStyle={{ paddingTop: '10px' }} />
                     <ReferenceLine x={0} stroke="#444" strokeWidth={1} />
                     
-                    {/* Barra de Total (Fundo) */}
-                    <Bar dataKey="totalDisplay" name="Total" barSize={20} radius={[0, 4, 4, 0]}>
-                      {eaContributionDisplayData.map((entry, index) => (
-                        <Cell 
-                          key={`cell-total-${index}`} 
-                          fill={entry.totalNet >= 0 ? 'rgba(74, 222, 128, 0.15)' : 'rgba(248, 113, 113, 0.15)'}
-                          stroke={entry.totalNet >= 0 ? 'rgba(74, 222, 128, 0.3)' : 'rgba(248, 113, 113, 0.3)'}
-                        />
-                      ))}
-                    </Bar>
-                    
-                    {/* Barra de Período (Frente) */}
-                    <Bar dataKey="periodDisplay" name="Período" barSize={12} radius={[0, 3, 3, 0]}>
+                    {/* Barra de Período */}
+                    <Bar dataKey="periodDisplay" name="Período" barSize={20} radius={[0, 4, 4, 0]}>
                       {eaContributionDisplayData.map((entry, index) => (
                         <Cell 
                           key={`cell-period-${index}`} 
