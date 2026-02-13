@@ -18,6 +18,8 @@ export interface Deal {
   position_id: number;
   duration?: number;
   position_open_time?: string;
+  entry_price?: number;
+  points?: number;
 }
 
 export interface Position {

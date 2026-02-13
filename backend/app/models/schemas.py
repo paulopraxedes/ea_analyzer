@@ -28,6 +28,8 @@ class Deal(BaseModel):
     ea_id: str
     duration: Optional[float] = None
     position_open_time: Optional[datetime] = None
+    entry_price: Optional[float] = None
+    points: Optional[float] = None
 
 class Position(BaseModel):
     ticket: int

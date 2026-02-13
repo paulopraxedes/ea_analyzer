@@ -102,11 +102,23 @@ class MT5Service:
                 # We prioritize the magic number from the opening order of the position
                 if "position_id" in df_orders.columns and "magic" in df_orders.columns:
                     # Get the first order (opening) for each position to capture the correct magic number and time
-                    position_info = df_orders.sort_values("time_setup").groupby("position_id", as_index=False).agg({
+                    agg_dict = {
                         "magic": "first",
-                        "time_setup": "first"  # This captures the order placement time
-                    })
-                    position_info.rename(columns={"magic": "position_magic", "time_setup": "position_open_time"}, inplace=True)
+                        "time_setup": "first"
+                    }
+                    if "price_open" in df_orders.columns:
+                        agg_dict["price_open"] = "first"
+
+                    position_info = df_orders.sort_values("time_setup").groupby("position_id", as_index=False).agg(agg_dict)
+                    
+                    rename_dict = {
+                        "magic": "position_magic", 
+                        "time_setup": "position_open_time"
+                    }
+                    if "price_open" in position_info.columns:
+                        rename_dict["price_open"] = "order_entry_price"
+                        
+                    position_info.rename(columns=rename_dict, inplace=True)
                     
                     df = df.merge(position_info, on="position_id", how="left")
                     
@@ -122,10 +134,38 @@ class MT5Service:
                     
                     df = df.drop(columns=["position_magic"])
             
+            # Extract entry price from Entry Deals (if available in the fetched range)
+            if "entry" in df.columns:
+                entry_deals = df[df["entry"] == 0].copy()
+                if not entry_deals.empty:
+                    entry_prices = entry_deals.groupby("position_id")["price"].first().reset_index()
+                    entry_prices.rename(columns={"price": "deal_entry_price"}, inplace=True)
+                    df = df.merge(entry_prices, on="position_id", how="left")
+            
             # Filter for entry types (IN/OUT/INOUT) - actually we want OUT/INOUT for results
             # logic from analyzer.py: entry in [1, 2, 3] (ENTRY_OUT, ENTRY_INOUT, ENTRY_OUT_BY)
             df = df[df["entry"].isin([1, 2, 3])].copy()
             
+            # Consolidate entry_price
+            if "deal_entry_price" not in df.columns:
+                df["deal_entry_price"] = None
+            if "order_entry_price" not in df.columns:
+                df["order_entry_price"] = None
+                
+            df["entry_price"] = df["deal_entry_price"].combine_first(df["order_entry_price"])
+            
+            # Calculate points
+            # For closing deal:
+            # Type 1 (SELL) -> Closing a BUY position -> Profit = Price - Entry
+            # Type 0 (BUY) -> Closing a SELL position -> Profit = Entry - Price = -(Price - Entry)
+            # Multiplier: (2 * type - 1)
+            #   type=1 => (2-1)=1 => Price - Entry
+            #   type=0 => (0-1)=-1 => -(Price - Entry) = Entry - Price
+            df["points"] = (df["price"] - df["entry_price"]) * (2 * df["type"] - 1)
+            
+            # Clean up temp columns
+            df = df.drop(columns=["deal_entry_price", "order_entry_price"], errors="ignore")
+
             df["net_profit"] = df["profit"] + df["commission"] + df["swap"]
             
             def create_ea_id(row):

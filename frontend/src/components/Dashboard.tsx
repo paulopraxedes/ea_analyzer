@@ -1163,7 +1163,9 @@ export function Dashboard({ filters, onDataLoaded }: { filters: DashboardFilters
                   <th style={{ padding: '15px' }}>Ativo</th>
                   <th style={{ padding: '15px' }}>Tipo</th>
                   <th style={{ padding: '15px' }}>Volume</th>
-                  <th style={{ padding: '15px' }}>Preço de Entrada</th>
+                  <th style={{ padding: '15px' }}>Preço Entrada</th>
+                  <th style={{ padding: '15px' }}>Preço Saída</th>
+                  <th style={{ padding: '15px' }}>Pontos</th>
                   <th style={{ padding: '15px' }}>Lucro/Prejuízo</th>
                   <th style={{ padding: '15px' }}>EA</th>
                 </tr>
@@ -1200,7 +1202,9 @@ export function Dashboard({ filters, onDataLoaded }: { filters: DashboardFilters
                       </span>
                     </td>
                     <td style={{ padding: '15px' }}>{deal.volume}</td>
+                    <td style={{ padding: '15px' }}>{deal.entry_price ?? '-'}</td>
                     <td style={{ padding: '15px' }}>{deal.price}</td>
+                    <td style={{ padding: '15px' }}>{deal.points ? deal.points.toFixed(0) : '-'}</td>
                     <td style={{ padding: '15px', color: deal.net_profit >= 0 ? '#00ff00' : '#ff4444', fontWeight: 'bold' }}>
                       {formatCurrency(deal.net_profit, deal.symbol)}
                     </td>
