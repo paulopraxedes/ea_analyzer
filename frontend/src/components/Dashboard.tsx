@@ -1047,7 +1047,7 @@ export function Dashboard({ filters, onDataLoaded }: { filters: DashboardFilters
                       type="category"
                       dataKey="ea"
                       stroke="#666"
-                      tick={{ fill: '#e0e0e0', fontSize: '0.85rem' }}
+                      tick={{ fill: '#e0e0e0', fontSize: '0.85rem', textAnchor: 'start', x: 30 }}
                       width={140}
                       tickLine={false}
                     />
