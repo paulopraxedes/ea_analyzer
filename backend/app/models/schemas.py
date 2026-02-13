@@ -26,6 +26,8 @@ class Deal(BaseModel):
     # Calculated fields
     net_profit: float
     ea_id: str
+    duration: Optional[float] = None
+    position_open_time: Optional[datetime] = None
 
 class Position(BaseModel):
     ticket: int

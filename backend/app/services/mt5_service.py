@@ -85,6 +85,8 @@ class MT5Service:
             orders = mt5.history_orders_get(date_from, date_to)
             if orders is not None and len(orders) > 0:
                 df_orders = pd.DataFrame(list(orders), columns=orders[0]._asdict().keys())
+                
+                # Merge logic for SL/TP
                 if "position_id" in df_orders.columns:
                     if "sl" not in df_orders.columns:
                         df_orders["sl"] = None
@@ -95,6 +97,30 @@ class MT5Service:
                     df["price_sl"] = df["sl"].combine_first(df["price_sl"])
                     df["price_tp"] = df["tp"].combine_first(df["price_tp"])
                     df = df.drop(columns=["sl", "tp"])
+                
+                # Merge logic for Magic Number and Open Time from original order/position
+                # We prioritize the magic number from the opening order of the position
+                if "position_id" in df_orders.columns and "magic" in df_orders.columns:
+                    # Get the first order (opening) for each position to capture the correct magic number and time
+                    position_info = df_orders.sort_values("time_setup").groupby("position_id", as_index=False).agg({
+                        "magic": "first",
+                        "time_setup": "first"  # This captures the order placement time
+                    })
+                    position_info.rename(columns={"magic": "position_magic", "time_setup": "position_open_time"}, inplace=True)
+                    
+                    df = df.merge(position_info, on="position_id", how="left")
+                    
+                    # Override magic with position_magic if available
+                    df["magic"] = df["position_magic"].combine_first(df["magic"])
+                    
+                    # We keep the deal time as 'time' (exit time for the deal), but we can expose position_open_time if needed
+                    # For now, let's ensure we have duration data available
+                    # Convert position_open_time from timestamp (if needed) or ensure it matches format
+                    # MT5 time_setup is usually int (seconds). Let's convert to datetime
+                    df["position_open_time"] = pd.to_datetime(df["position_open_time"], unit="s")
+                    df["duration"] = (df["time"] - df["position_open_time"]).dt.total_seconds()
+                    
+                    df = df.drop(columns=["position_magic"])
             
             # Filter for entry types (IN/OUT/INOUT) - actually we want OUT/INOUT for results
             # logic from analyzer.py: entry in [1, 2, 3] (ENTRY_OUT, ENTRY_INOUT, ENTRY_OUT_BY)

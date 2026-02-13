@@ -5,7 +5,7 @@ import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, R
 import { format, parseISO, getDay, getHours } from 'date-fns';
 import { KPICard } from './KPICard';
 import type { DashboardFilters } from './Sidebar';
-import { Activity, TrendingUp, TrendingDown, Flame, Repeat, Gauge } from 'lucide-react';
+import { Activity, TrendingUp, TrendingDown, Flame, Repeat, Gauge, Clock } from 'lucide-react';
 
 const DAY_MAP: { [key: number]: string } = {
   0: 'Dom', 1: 'Seg', 2: 'Ter', 3: 'Qua', 4: 'Qui', 5: 'Sex', 6: 'Sáb'
@@ -234,9 +234,13 @@ export function Dashboard({ filters, onDataLoaded }: { filters: DashboardFilters
       }
     });
 
+    // Calculate Average Duration
+    const totalDuration = filtered.reduce((sum, deal) => sum + (deal.duration || 0), 0);
+    const avgDurationSeconds = filtered.length > 0 ? totalDuration / filtered.length : 0;
+    
     setMetrics({
       general: {
-        net_profit,
+        net_profit: net_profit,
         gross_profit,
         gross_loss,
         total_costs,
@@ -249,7 +253,8 @@ export function Dashboard({ filters, onDataLoaded }: { filters: DashboardFilters
         profit_factor,
         max_win_streak: maxWinStreak,
         max_loss_streak: maxLossStreak,
-        period_growth: growthPercentage
+        period_growth: growthPercentage,
+        avg_duration: avgDurationSeconds
       },
       advanced: {},
       sequences: {},
@@ -624,6 +629,20 @@ export function Dashboard({ filters, onDataLoaded }: { filters: DashboardFilters
                 value={formatCurrency(metrics.general.avg_loss, 'BRL')} 
                 color="#ff4444"
                 icon={TrendingDown}
+              />
+              <KPICard 
+                title="Duração Média" 
+                value={metrics.general.avg_duration 
+                  ? (() => {
+                      const d = Math.floor(metrics.general.avg_duration);
+                      const hours = Math.floor(d / 3600);
+                      const minutes = Math.floor((d % 3600) / 60);
+                      const seconds = d % 60;
+                      return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+                    })()
+                  : '00:00:00'
+                }
+                icon={Clock}
               />
             </div>
             </>
@@ -1136,7 +1155,9 @@ export function Dashboard({ filters, onDataLoaded }: { filters: DashboardFilters
             <table style={{ width: '100%', borderCollapse: 'collapse', textAlign: 'left', fontSize: '0.9rem' }}>
               <thead>
                 <tr style={{ borderBottom: '1px solid #444', color: '#aaa' }}>
-                  <th style={{ padding: '15px' }}>Data</th>
+                  <th style={{ padding: '15px' }}>Abertura</th>
+                  <th style={{ padding: '15px' }}>Fechamento</th>
+                  <th style={{ padding: '15px' }}>Duração</th>
                   <th style={{ padding: '15px' }}>Ticket (Deal)</th>
                   <th style={{ padding: '15px' }}>ID Posição</th>
                   <th style={{ padding: '15px' }}>Ativo</th>
@@ -1150,7 +1171,23 @@ export function Dashboard({ filters, onDataLoaded }: { filters: DashboardFilters
               <tbody>
                 {tradesPageData.map((deal) => (
                   <tr key={deal.ticket} style={{ borderBottom: '1px solid #333', color: '#e0e0e0' }}>
-                    <td style={{ padding: '15px' }}>{format(new Date(deal.time), 'dd/MM/yyyy HH:mm')}</td>
+                    <td style={{ padding: '15px' }}>
+                      {deal.position_open_time 
+                        ? format(new Date(deal.position_open_time), 'dd/MM/yyyy HH:mm:ss')
+                        : '-'}
+                    </td>
+                    <td style={{ padding: '15px' }}>{format(new Date(deal.time), 'dd/MM/yyyy HH:mm:ss')}</td>
+                    <td style={{ padding: '15px' }}>
+                      {deal.duration 
+                        ? (() => {
+                            const d = Math.floor(deal.duration);
+                            const hours = Math.floor(d / 3600);
+                            const minutes = Math.floor((d % 3600) / 60);
+                            const seconds = d % 60;
+                            return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+                          })()
+                        : '-'}
+                    </td>
                     <td style={{ padding: '15px' }}>{deal.ticket}</td>
                     <td style={{ padding: '15px' }}>{deal.position_id}</td>
                     <td style={{ padding: '15px' }}>{deal.symbol}</td>

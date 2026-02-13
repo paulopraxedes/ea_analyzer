@@ -16,6 +16,8 @@ export interface Deal {
   net_profit: number;
   ea_id: string;
   position_id: number;
+  duration?: number;
+  position_open_time?: string;
 }
 
 export interface Position {
