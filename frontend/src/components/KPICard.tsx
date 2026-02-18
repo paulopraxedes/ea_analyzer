@@ -7,9 +7,10 @@ interface KPICardProps {
   trend?: 'up' | 'down' | 'neutral';
   color?: string; // Hex color for the value or accent
   size?: 'small' | 'large';
+  note?: string;
 }
 
-export function KPICard({ title, value, color = '#fff', size = 'small', icon: Icon }: KPICardProps) {
+export function KPICard({ title, value, color = '#fff', size = 'small', icon: Icon, note }: KPICardProps) {
   return (
     <div style={{
       background: '#1e1e1e',
@@ -47,6 +48,17 @@ export function KPICard({ title, value, color = '#fff', size = 'small', icon: Ic
       }}>
         {value}
       </div>
+      {note && (
+        <div style={{
+          marginTop: '8px',
+          fontSize: '0.8rem',
+          color: '#999',
+          textAlign: 'center',
+          width: '100%'
+        }}>
+          {note}
+        </div>
+      )}
     </div>
   );
 }

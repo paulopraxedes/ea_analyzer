@@ -37,6 +37,8 @@ export function Dashboard({ filters, onDataLoaded }: { filters: DashboardFilters
   const [tradesPerPage, setTradesPerPage] = useState(25);
   const [eaContributionMode, setEaContributionMode] = useState<'valor' | 'percentual'>('valor');
   const [eaContributionTopOnly, setEaContributionTopOnly] = useState(false);
+  const [realTimeKPIs, setRealTimeKPIs] = useState(true);
+  const [positionsRefreshSec, setPositionsRefreshSec] = useState(10);
   
   // Default range: last 5 years to cover everything for now
   // In a real app, this should probably come from the filters or be adjustable
@@ -124,6 +126,18 @@ export function Dashboard({ filters, onDataLoaded }: { filters: DashboardFilters
     }, intervalMs);
     return () => clearInterval(intervalId);
   }, [fetchData, filters.resyncMinutes]);
+
+  useEffect(() => {
+    const intervalId = setInterval(async () => {
+      try {
+        const positionsData = await api.getPositions();
+        setOpenPositions(positionsData);
+      } catch (err) {
+        console.error('Error refreshing positions:', err);
+      }
+    }, positionsRefreshSec * 1000);
+    return () => clearInterval(intervalId);
+  }, [positionsRefreshSec]);
 
   useEffect(() => {
     setResultLevel('year');
@@ -576,75 +590,134 @@ export function Dashboard({ filters, onDataLoaded }: { filters: DashboardFilters
           {metrics && (
             <>
             <h3 style={{ marginBottom: '20px', color: '#fff', fontSize: '1.1rem', textTransform: 'uppercase', letterSpacing: '1px' }}>Visão Geral</h3>
-            <div className="kpi-grid" style={{ marginBottom: '40px', display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '20px' }}>
-              <KPICard 
-                title="Evolução do Saldo" 
-                value={`${metrics.general.period_growth > 0 ? '+' : ''}${metrics.general.period_growth.toFixed(2)}%`} 
-                color={metrics.general.period_growth >= 0 ? "#00ff00" : "#ff4444"}
-                icon={Gauge}
-              />
-              <KPICard 
-                title="Lucro Líquido" 
-                value={formatCurrency(metrics.general.net_profit, 'BRL')} 
-                color={metrics.general.net_profit >= 0 ? '#00ff00' : '#ff4444'} 
-                icon={Activity}
-              />
-              <KPICard 
-                title="Lucro Bruto" 
-                value={formatCurrency(metrics.general.gross_profit, 'BRL')} 
-                color="#00ff00"
-                icon={TrendingUp}
-              />
-              <KPICard 
-                title="Perda Bruta" 
-                value={formatCurrency(metrics.general.gross_loss, 'BRL')} 
-                color="#ff4444"
-                icon={TrendingDown}
-              />
-              <KPICard 
-                title="Fator de Lucro" 
-                value={metrics.general.profit_factor?.toFixed(2)} 
-                icon={Gauge}
-              />
-              <KPICard 
-                title="Sequência Positiva" 
-                value={metrics.general.max_win_streak ?? 0} 
-                color="#00ff00"
-                icon={Flame}
-              />
-              <KPICard 
-                title="Sequência Negativa" 
-                value={metrics.general.max_loss_streak ?? 0} 
-                color="#ff4444"
-                icon={Repeat}
-              />
-              <KPICard 
-                title="Média de Lucro" 
-                value={formatCurrency(metrics.general.avg_win, 'BRL')} 
-                color="#00ff00"
-                icon={TrendingUp}
-              />
-              <KPICard 
-                title="Média de Perda" 
-                value={formatCurrency(metrics.general.avg_loss, 'BRL')} 
-                color="#ff4444"
-                icon={TrendingDown}
-              />
-              <KPICard 
-                title="Duração Média" 
-                value={metrics.general.avg_duration 
-                  ? (() => {
-                      const d = Math.floor(metrics.general.avg_duration);
-                      const hours = Math.floor(d / 3600);
-                      const minutes = Math.floor((d % 3600) / 60);
-                      const seconds = d % 60;
-                      return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
-                    })()
-                  : '00:00:00'
-                }
-                icon={Clock}
-              />
+            <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: '10px', gap: '10px' }}>
+              <button
+                onClick={() => setRealTimeKPIs(value => !value)}
+                style={{
+                  padding: '6px 10px',
+                  borderRadius: '6px',
+                  border: '1px solid #333',
+                  background: realTimeKPIs ? '#00aaff' : '#1b1b1b',
+                  color: realTimeKPIs ? '#fff' : '#bbb',
+                  cursor: 'pointer',
+                  fontWeight: 600
+                }}
+              >
+                KPIs em tempo real
+              </button>
+              <label style={{ display: 'flex', alignItems: 'center', gap: '8px', color: '#bbb', fontSize: '0.9rem' }}>
+                Atualização das posições
+                <select
+                  value={positionsRefreshSec}
+                  onChange={(e) => setPositionsRefreshSec(Number(e.target.value))}
+                  style={{
+                    padding: '6px 8px',
+                    borderRadius: '6px',
+                    border: '1px solid #333',
+                    background: '#1b1b1b',
+                    color: '#bbb'
+                  }}
+                >
+                  {[5, 10, 30, 60].map(s => (
+                    <option key={s} value={s}>{s}s</option>
+                  ))}
+                </select>
+              </label>
             </div>
+            {(() => {
+              const balanceStart = allDeals
+                .filter(deal => new Date(deal.time) < new Date(filters.dateFrom))
+                .filter(deal => (filters.selectedAssets.includes('Todos') || filters.selectedAssets.includes(deal.symbol)))
+                .filter(deal => (filters.selectedEAs.includes('Todos') || filters.selectedEAs.includes(deal.ea_id)))
+                .reduce((sum, d) => sum + d.net_profit, 0);
+              const netProfitDisplay = realTimeKPIs ? metrics.general.net_profit + openPositionsProfitTotal : metrics.general.net_profit;
+              const pnlNote = realTimeKPIs && openPositionsProfitTotal !== 0
+                ? `inclui posições abertas: ${openPositionsProfitTotal >= 0 ? '+' : ''}${formatCurrency(openPositionsProfitTotal, 'BRL')}`
+                : undefined;
+              let growthDisplay = metrics.general.period_growth;
+              if (realTimeKPIs) {
+                if (Math.abs(balanceStart) > 0.01) {
+                  const balanceEnd = balanceStart + netProfitDisplay;
+                  growthDisplay = ((balanceEnd - balanceStart) / Math.abs(balanceStart)) * 100;
+                } else if (netProfitDisplay !== 0) {
+                  growthDisplay = netProfitDisplay > 0 ? 100 : -100;
+                } else {
+                  growthDisplay = 0;
+                }
+              }
+              return (
+                <div className="kpi-grid" style={{ marginBottom: '40px', display: 'grid', gridTemplateColumns: 'repeat(5, 1fr)', gap: '20px' }}>
+                  <KPICard 
+                    title="Evolução do Saldo" 
+                    value={`${growthDisplay > 0 ? '+' : ''}${growthDisplay.toFixed(2)}%`} 
+                    color={growthDisplay >= 0 ? "#00ff00" : "#ff4444"}
+                    icon={Gauge}
+                  />
+                  <KPICard 
+                    title="Lucro Líquido" 
+                    value={formatCurrency(netProfitDisplay, 'BRL')} 
+                    color={netProfitDisplay >= 0 ? '#00ff00' : '#ff4444'} 
+                    icon={Activity}
+                    note={pnlNote}
+                  />
+                  <KPICard 
+                    title="Lucro Bruto" 
+                    value={formatCurrency(metrics.general.gross_profit, 'BRL')} 
+                    color="#00ff00"
+                    icon={TrendingUp}
+                  />
+                  <KPICard 
+                    title="Perda Bruta" 
+                    value={formatCurrency(metrics.general.gross_loss, 'BRL')} 
+                    color="#ff4444"
+                    icon={TrendingDown}
+                  />
+                  <KPICard 
+                    title="Fator de Lucro" 
+                    value={metrics.general.profit_factor?.toFixed(2)} 
+                    icon={Gauge}
+                  />
+                  <KPICard 
+                    title="Sequência Positiva" 
+                    value={metrics.general.max_win_streak ?? 0} 
+                    color="#00ff00"
+                    icon={Flame}
+                  />
+                  <KPICard 
+                    title="Sequência Negativa" 
+                    value={metrics.general.max_loss_streak ?? 0} 
+                    color="#ff4444"
+                    icon={Repeat}
+                  />
+                  <KPICard 
+                    title="Média de Lucro" 
+                    value={formatCurrency(metrics.general.avg_win, 'BRL')} 
+                    color="#00ff00"
+                    icon={TrendingUp}
+                  />
+                  <KPICard 
+                    title="Média de Perda" 
+                    value={formatCurrency(metrics.general.avg_loss, 'BRL')} 
+                    color="#ff4444"
+                    icon={TrendingDown}
+                  />
+                  <KPICard 
+                    title="Duração Média" 
+                    value={metrics.general.avg_duration 
+                      ? (() => {
+                          const d = Math.floor(metrics.general.avg_duration);
+                          const hours = Math.floor(d / 3600);
+                          const minutes = Math.floor((d % 3600) / 60);
+                          const seconds = d % 60;
+                          return `${hours.toString().padStart(2, '0')}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+                        })()
+                      : '00:00:00'
+                    }
+                    icon={Clock}
+                  />
+                </div>
+              );
+            })()}
             </>
           )}
 
