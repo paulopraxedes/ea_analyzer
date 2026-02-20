@@ -24,6 +24,9 @@ build/
 .vite/
 *.local
 
+# Configuração local de nomes de EA (não versionar)
+frontend/src/config/eaMap.ts
+
 .idea/
 .vscode/
 .DS_Store

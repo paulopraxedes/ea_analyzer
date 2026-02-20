@@ -1,4 +1,5 @@
 import { Calendar, LayoutDashboard, Filter, Clock, RefreshCw } from 'lucide-react';
+import { resolveEAName } from '../config/eaMap';
 
 export interface DashboardFilters {
   dateFrom: string;
@@ -154,7 +155,9 @@ export function Sidebar({ filters, onFilterChange, availableAssets, availableEAs
                 onChange={() => handleEAToggle(ea)} 
                 style={{ accentColor: '#00ff00' }}
               />
-              <span style={{ fontSize: '0.9rem', color: '#fff' }}>{ea}</span>
+              <span style={{ fontSize: '0.9rem', color: '#fff' }}>
+                {ea === 'Todos' ? ea : resolveEAName(ea)}
+              </span>
             </label>
           ))}
         </div>

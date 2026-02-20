@@ -39,6 +39,43 @@ MIN_DAYS_FOR_SHARPE=30
 
 Se `MT5_PATH` não for definido, o backend tentará usar a configuração padrão do MT5.
 
+### Mapeamento de nomes de EAs (opcional, apenas frontend)
+
+Por padrão, o backend expõe apenas o identificador genérico de cada robô no campo `ea_id`, no formato:
+
+- `Manual` quando o Magic Number é `0`
+- `EA 123456` quando o Magic Number é diferente de zero
+
+Para exibir nomes amigáveis em vez de apenas `EA 123456`, você pode criar um arquivo local no frontend:
+
+1. Copie o arquivo de exemplo:
+
+   - De: `frontend/src/config/eaMap.ts`
+   - Para: `frontend/src/config/eaMap.ts` (no seu ambiente local, se ainda não existir)
+
+2. Edite o conteúdo para preencher a lista de EAs com seus próprios Magic Numbers:
+
+```ts
+export interface EAMapEntry {
+  magic_number: number;
+  name: string;
+}
+
+export interface EAConfig {
+  ea: EAMapEntry[];
+}
+
+export const EA_CONFIG: EAConfig = {
+  ea: [
+    { magic_number: 123456, name: 'Meu EA de Tendência' },
+    { magic_number: 20250130, name: 'Outro EA Qualquer' }
+  ]
+};
+```
+
+Esse arquivo é utilizado apenas no frontend para converter `EA 123456` em nomes legíveis nas tabelas, filtros e gráficos.  
+O arquivo `frontend/src/config/eaMap.ts` está listado em `.gitignore`, portanto seus dados privados não serão enviados para o repositório.
+
 ## Como Rodar
 
 ### Backend

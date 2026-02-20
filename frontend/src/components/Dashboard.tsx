@@ -6,6 +6,7 @@ import { format, parseISO, getDay, getHours } from 'date-fns';
 import { KPICard } from './KPICard';
 import type { DashboardFilters } from './Sidebar';
 import { Activity, TrendingUp, TrendingDown, Flame, Repeat, Gauge, Clock } from 'lucide-react';
+import { resolveEAName } from '../config/eaMap';
 
 const DAY_MAP: { [key: number]: string } = {
   0: 'Dom', 1: 'Seg', 2: 'Ter', 3: 'Qua', 4: 'Qui', 5: 'Sex', 6: 'Sáb'
@@ -506,7 +507,7 @@ export function Dashboard({ filters, onDataLoaded }: { filters: DashboardFilters
   const topEA = Object.entries(eaStats).sort((a, b) => b[1].net - a[1].net)[0];
   const topEAStats = topEA
     ? {
-        name: topEA[0],
+        name: resolveEAName(topEA[0]),
         total: topEA[1].total,
         winRate: topEA[1].total > 0 ? (topEA[1].wins / topEA[1].total) * 100 : 0,
         net: topEA[1].net,
@@ -785,7 +786,7 @@ export function Dashboard({ filters, onDataLoaded }: { filters: DashboardFilters
                             <td style={{ padding: '12px', color: change !== null && change >= 0 ? '#00ff00' : '#ff4444', fontWeight: 600 }}>
                               {change !== null ? `${change.toFixed(2)}%` : '-'}
                             </td>
-                            <td style={{ padding: '12px' }}>{position.ea_id}</td>
+                            <td style={{ padding: '12px' }}>{resolveEAName(position.ea_id)}</td>
                             <td style={{ padding: '12px' }}>{position.comment || '-'}</td>
                           </tr>
                         );
@@ -1123,6 +1124,7 @@ export function Dashboard({ filters, onDataLoaded }: { filters: DashboardFilters
                       tick={{ fill: '#e0e0e0', fontSize: '0.85rem', textAnchor: 'start', x: 30 }}
                       width={140}
                       tickLine={false}
+                      tickFormatter={(value) => resolveEAName(String(value))}
                     />
                     <Tooltip 
                       contentStyle={{ backgroundColor: '#1a1a1a', border: '1px solid #333', borderRadius: '8px', boxShadow: '0 4px 12px rgba(0,0,0,0.5)' }}
@@ -1281,7 +1283,7 @@ export function Dashboard({ filters, onDataLoaded }: { filters: DashboardFilters
                     <td style={{ padding: '15px', color: deal.net_profit >= 0 ? '#00ff00' : '#ff4444', fontWeight: 'bold' }}>
                       {formatCurrency(deal.net_profit, deal.symbol)}
                     </td>
-                    <td style={{ padding: '15px' }}>{deal.ea_id}</td>
+                    <td style={{ padding: '15px' }}>{resolveEAName(deal.ea_id)}</td>
                   </tr>
                 ))}
               </tbody>
